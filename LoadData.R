@@ -1,6 +1,6 @@
 #LoadData - R script
 
-library(Seurat) # packageVersion("Seurat") ‘4.1.1’
+library(Seurat) 
 library(scales)
 library(cowplot)
 library(ggplot2)

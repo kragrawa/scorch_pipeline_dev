@@ -147,16 +147,16 @@ FilterCells <- function(data_S_list, ngene_lth = NULL, ngene_hth = NULL, mt_hth,
       data_S_list[[i]]$ngene_lth <- ngene_lth
       data_S_list[[i]]$ngene_hth <- ngene_hth
       data_S_list[[i]]$mt_hth <- mt_hth
-      data_S_list[[i]]$nRNA_lth <- nRNA_lth
-      data_S_list[[i]]$nRNA_hth <- nRNA_hth
+      #data_S_list[[i]]$nRNA_lth <- nRNA_lth
+      #data_S_list[[i]]$nRNA_hth <- nRNA_hth
       data_S_list[[i]] <- subset(
         x = data_S_list[[i]], 
-        subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt < mt_hth & nCount_RNA > nRNA_lth & nCount_RNA < nRNA_hth
+        #subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt < mt_hth & nCount_RNA > nRNA_lth & nCount_RNA < nRNA_hth
+        subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt < mt_hth
       )
       data_S_list[[i]] <- RenameCells(data_S_list[[i]], add.cell.id = i)
     }
   }
-  
   data_S_list
 }
 
