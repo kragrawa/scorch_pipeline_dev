@@ -1,2 +1,4 @@
 work/
 test_samples/
+.nextflow.*
+.nextflow/
