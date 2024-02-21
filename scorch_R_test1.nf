@@ -2,31 +2,24 @@ nextflow.enable.dsl=2
 
 process loadData {
     container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    
 
     input:
-    file(input_file) from input_channel
-    output:
-    file("individual_samples.rds") into output_channel
+    path data_dir
 
-    // Specify the script to run
+    output:
+    path "individual_samples.rds"
+
     script:
     """
-    Rscript your_r_script.R $input_file individual_samples.rds
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadData.R "${data_dir}" individual_samples.rds
     """
 }
 
-process runRScript {
-    container 'my_r_seurat_image'
-
-    output:
-        path("output.txt"), emit: result
-
-    script:
-        """
-        Rscript /data/kriti/pipeline_dev/seurat_test_script.r > output.txt
-        """
-}
-
+// Workflow definition
 workflow {
-    runRScript()
+    def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
+    loadData(data_dir)
 }

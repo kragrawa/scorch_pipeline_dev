@@ -1,0 +1,136 @@
+Feb-21 14:00:19.579 [main] DEBUG nextflow.cli.Launcher - $> nextflow run scorch_R_test1.nf
+Feb-21 14:00:19.672 [main] INFO  nextflow.cli.CmdRun - N E X T F L O W  ~  version 23.10.1
+Feb-21 14:00:19.691 [main] DEBUG nextflow.plugin.PluginsFacade - Setting up plugin manager > mode=prod; embedded=false; plugins-dir=/home/kriti/.nextflow/plugins; core-plugins: nf-amazon@2.1.4,nf-azure@1.3.3,nf-cloudcache@0.3.0,nf-codecommit@0.1.5,nf-console@1.0.6,nf-ga4gh@1.1.0,nf-google@1.8.3,nf-tower@1.6.3,nf-wave@1.0.1
+Feb-21 14:00:19.701 [main] INFO  o.pf4j.DefaultPluginStatusProvider - Enabled plugins: []
+Feb-21 14:00:19.702 [main] INFO  o.pf4j.DefaultPluginStatusProvider - Disabled plugins: []
+Feb-21 14:00:19.706 [main] INFO  org.pf4j.DefaultPluginManager - PF4J version 3.4.1 in 'deployment' mode
+Feb-21 14:00:19.716 [main] INFO  org.pf4j.AbstractPluginManager - No plugins
+Feb-21 14:00:19.787 [main] DEBUG nextflow.cli.CmdRun - Applied DSL=2 from script declararion
+Feb-21 14:00:19.806 [main] INFO  nextflow.cli.CmdRun - Launching `scorch_R_test1.nf` [confident_ekeblad] DSL2 - revision: fdf8e444f7
+Feb-21 14:00:19.806 [main] DEBUG nextflow.plugin.PluginsFacade - Plugins default=[]
+Feb-21 14:00:19.807 [main] DEBUG nextflow.plugin.PluginsFacade - Plugins resolved requirement=[]
+Feb-21 14:00:19.816 [main] DEBUG n.secret.LocalSecretsProvider - Secrets store: /home/kriti/.nextflow/secrets/store.json
+Feb-21 14:00:19.823 [main] DEBUG nextflow.secret.SecretsLoader - Discovered secrets providers: [nextflow.secret.LocalSecretsProvider@5c10285a] - activable => nextflow.secret.LocalSecretsProvider@5c10285a
+Feb-21 14:00:19.893 [main] DEBUG nextflow.Session - Session UUID: 1d522139-0d9a-40cd-a6ea-c60eb07a5f60
+Feb-21 14:00:19.893 [main] DEBUG nextflow.Session - Run name: confident_ekeblad
+Feb-21 14:00:19.894 [main] DEBUG nextflow.Session - Executor pool size: 72
+Feb-21 14:00:19.901 [main] DEBUG nextflow.file.FilePorter - File porter settings maxRetries=3; maxTransfers=50; pollTimeout=null
+Feb-21 14:00:19.928 [main] DEBUG nextflow.util.ThreadPoolBuilder - Creating thread pool 'FileTransfer' minSize=10; maxSize=216; workQueue=LinkedBlockingQueue[10000]; allowCoreThreadTimeout=false
+Feb-21 14:00:19.959 [main] DEBUG nextflow.cli.CmdRun - 
+  Version: 23.10.1 build 5891
+  Created: 12-01-2024 22:01 UTC (17:01 EDT)
+  System: Linux 5.4.0-153-generic
+  Runtime: Groovy 3.0.19 on OpenJDK 64-Bit Server VM 11.0.13+7-b1751.21
+  Encoding: UTF-8 (UTF-8)
+  Process: 824877@cantor [127.0.1.1]
+  CPUs: 72 - Mem: 1006.5 GB (293.7 GB) - Swap: 137.3 GB (137.3 GB)
+Feb-21 14:00:19.980 [main] DEBUG nextflow.Session - Work-dir: /data/kriti/pipeline_dev/scorch_pipeline_dev/work [ext2/ext3]
+Feb-21 14:00:19.981 [main] DEBUG nextflow.Session - Script base path does not exist or is not a directory: /data/kriti/pipeline_dev/scorch_pipeline_dev/bin
+Feb-21 14:00:19.990 [main] DEBUG nextflow.executor.ExecutorFactory - Extension executors providers=[]
+Feb-21 14:00:20.001 [main] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+Feb-21 14:00:20.022 [main] DEBUG nextflow.cache.CacheFactory - Using Nextflow cache factory: nextflow.cache.DefaultCacheFactory
+Feb-21 14:00:20.033 [main] DEBUG nextflow.util.CustomThreadPool - Creating default thread pool > poolSize: 73; maxThreads: 1000
+Feb-21 14:00:20.281 [main] DEBUG nextflow.Session - Session start
+Feb-21 14:00:20.867 [main] DEBUG nextflow.script.ScriptRunner - > Launching execution
+Feb-21 14:00:20.964 [main] DEBUG nextflow.executor.ExecutorFactory - << taskConfig executor: null
+Feb-21 14:00:20.964 [main] DEBUG nextflow.executor.ExecutorFactory - >> processorType: 'local'
+Feb-21 14:00:20.969 [main] DEBUG nextflow.executor.Executor - [warm up] executor > local
+Feb-21 14:00:20.975 [main] DEBUG n.processor.LocalPollingMonitor - Creating local task monitor for executor 'local' > cpus=72; memory=1006.5 GB; capacity=72; pollInterval=100ms; dumpInterval=5m
+Feb-21 14:00:20.977 [main] DEBUG n.processor.TaskPollingMonitor - >>> barrier register (monitor: local)
+Feb-21 14:00:21.078 [main] DEBUG nextflow.Session - Workflow process names [dsl2]: loadData
+Feb-21 14:00:21.079 [main] DEBUG nextflow.Session - Igniting dataflow network (2)
+Feb-21 14:00:21.088 [main] DEBUG nextflow.processor.TaskProcessor - Starting process > loadData
+Feb-21 14:00:21.089 [main] DEBUG nextflow.script.ScriptRunner - Parsed script files:
+  Script_a603523ee51079cb: /data/kriti/pipeline_dev/scorch_pipeline_dev/scorch_R_test1.nf
+Feb-21 14:00:21.089 [main] DEBUG nextflow.script.ScriptRunner - > Awaiting termination 
+Feb-21 14:00:21.090 [main] DEBUG nextflow.Session - Session await
+Feb-21 14:00:21.316 [Task submitter] DEBUG n.executor.local.LocalTaskHandler - Launch cmd line: /bin/bash -ue .command.run
+Feb-21 14:00:21.320 [Task submitter] INFO  nextflow.Session - [40/b2cfd5] Submitted process > loadData (1)
+Feb-21 14:01:07.563 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 1; name: loadData (1); status: COMPLETED; exit: 1; error: -; workDir: /data/kriti/pipeline_dev/scorch_pipeline_dev/work/40/b2cfd5b4c8fac3f61c61a2dd87b2f4]
+Feb-21 14:01:07.567 [Task monitor] DEBUG nextflow.processor.TaskProcessor - Handling unexpected condition for
+  task: name=loadData (1); work-dir=/data/kriti/pipeline_dev/scorch_pipeline_dev/work/40/b2cfd5b4c8fac3f61c61a2dd87b2f4
+  error [nextflow.exception.ProcessFailedException]: Process `loadData (1)` terminated with an error exit status (1)
+Feb-21 14:01:07.582 [Task monitor] ERROR nextflow.processor.TaskProcessor - Error executing process > 'loadData (1)'
+
+Caused by:
+  Process `loadData (1)` terminated with an error exit status (1)
+
+Command executed:
+
+  Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadData.R cellranger_v7_RNA individual_samples.rds
+
+Command exit status:
+  1
+
+Command output:
+  [1] "cellranger_v7_RNA"
+  [1] "individual_samples.rds"
+  [1] "6800127569_HIVOUD_PFC_MAH_cellranger_v7"
+  [2] "6800706867_HIVOUD_PFC_MAH_cellranger_v7"
+  [3] "HCCDE_OUD_PFC_MAH_cellranger_v7"        
+  [4] "HCCX_OUD_PFC_MAH_cellranger_v7"         
+  [1] "cellranger_v7_RNA/6800127569_HIVOUD_PFC_MAH_cellranger_v7/outs/filtered_feature_bc_matrix"
+
+Command error:
+      collapse, desc, slice
+  
+  Loading required package: GenomeInfoDb
+  Loading required package: Biobase
+  Welcome to Bioconductor
+  
+      Vignettes contain introductory material; view with
+      'browseVignettes()'. To cite Bioconductor, see
+      'citation("Biobase")', and for packages 'citation("pkgname")'.
+  
+  
+  Attaching package: ‘Biobase’
+  
+  The following object is masked from ‘package:MatrixGenerics’:
+  
+      rowMedians
+  
+  The following objects are masked from ‘package:matrixStats’:
+  
+      anyMissing, rowMedians
+  
+  The following object is masked from ‘package:rlang’:
+  
+      exprs
+  
+  
+  Attaching package: ‘SummarizedExperiment’
+  
+  The following object is masked from ‘package:SeuratObject’:
+  
+      Assays
+  
+  The following object is masked from ‘package:Seurat’:
+  
+      Assays
+  
+  
+  Attaching package: ‘edgeR’
+  
+  The following object is masked from ‘package:SingleCellExperiment’:
+  
+      cpm
+  
+  [1] "6800127569_HIVOUD_PFC_MAH_cellranger_v7"
+  [2] "6800706867_HIVOUD_PFC_MAH_cellranger_v7"
+  [3] "HCCDE_OUD_PFC_MAH_cellranger_v7"        
+  [4] "HCCX_OUD_PFC_MAH_cellranger_v7"         
+  [1] "cellranger_v7_RNA/6800127569_HIVOUD_PFC_MAH_cellranger_v7/outs/filtered_feature_bc_matrix"
+  Error: $ operator not defined for this S4 class
+  Execution halted
+
+Work dir:
+  /data/kriti/pipeline_dev/scorch_pipeline_dev/work/40/b2cfd5b4c8fac3f61c61a2dd87b2f4
+
+Tip: you can replicate the issue by changing to the process work dir and entering the command `bash .command.run`
+Feb-21 14:01:07.591 [Task monitor] DEBUG nextflow.Session - Session aborted -- Cause: Process `loadData (1)` terminated with an error exit status (1)
+Feb-21 14:01:07.595 [main] DEBUG nextflow.Session - Session await > all processes finished
+Feb-21 14:01:07.606 [main] DEBUG nextflow.Session - Session await > all barriers passed
+Feb-21 14:01:07.607 [Task monitor] DEBUG n.processor.TaskPollingMonitor - <<< barrier arrives (monitor: local) - terminating tasks monitor poll loop
+Feb-21 14:01:07.642 [main] DEBUG n.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=1; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=46.2s; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=1; peakCpus=1; peakMemory=0; ]
+Feb-21 14:01:07.817 [main] DEBUG nextflow.cache.CacheDB - Closing CacheDB done
+Feb-21 14:01:07.877 [main] DEBUG nextflow.script.ScriptRunner - > Execution complete -- Goodbye

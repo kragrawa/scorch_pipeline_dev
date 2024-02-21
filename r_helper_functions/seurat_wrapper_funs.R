@@ -1,14 +1,87 @@
-`%notin%` <- Negate(`%in%`)
+library(Seurat)
+library(DoubletFinder) #remotes::install_github('chris-mcginnis-ucsf/DoubletFinder')
+library(Libra)
+library(rlang)
+library(patchwork)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(reshape2)
+library(scDblFinder)
 
-tabla <- function(...) {
-  call <- as.list(match.call())[-1] # first position is the function_name
+#functions for RunEdgeRPseudobulk
+library(magrittr, include.only = c("%<>%"))
+library(tibble, include.only=c("rownames_to_column"))
+library(edgeR, include.only=c("DGEList","calcNormFactors", "estimateDisp",
+                              "glmQLFit","glmQLFTest","glmFit","glmLRT", 
+                              "topTags", "cpm"))
+
+library(purrr, include.only=c("map"))
+library(stats, include.only=c("model.matrix"))
+library(forcats, include.only=c("fct_recode"))
+# Modify it to handle multiome
+Load10xData <- function(data_dir, sample_names, sub_rna_dir = "filtered_feature_bc_matrix", with.rna.only=F,with.multiome.rna.only=F,with.multiome=F,sub_tcr_dir = "TCR", human_only = F){
+  data_S_list <- list()
+  data_dir0 <- data_dir
+  if (with.rna.only){
+    for(i in sample_names){
+      data_dir <- paste(data_dir0, i, sub_rna_dir, sep = "/")
+      print(data_dir)
+      data_S_list[[i]] <- CreateSeuratObject(Read10X(data.dir = data_dir), project = i)
+    }
+  }
+  if (with.multiome){
+    # For output from CellRanger >= 3.0 with multiple data types
+    #list.files(data_dir) # Should show barcodes.tsv.gz, features.tsv.gz, and matrix.mtx.gz
+    data_dir0 <- data_dir
+    for(i in sample_names){
+      data_dir <- paste(data_dir0, i, sub_rna_dir, sep = "/")
+      print(data_dir)
+      data <- Read10X(data.dir = data_dir)
+      data_S_list[[i]] <- CreateSeuratObject(counts = data$`Gene Expression`, project = i)
+      data_S_list[[i]][["Peaks"]] <- CreateAssayObject(counts = data$`Peaks`)
+    }
+  }
+  if (with.multiome.rna.only){
+    # For output from CellRanger >= 3.0 with multiple data types
+    #list.files(data_dir) # Should show barcodes.tsv.gz, features.tsv.gz, and matrix.mtx.gz
+    data_dir0 <- data_dir
+    for(i in sample_names){
+      data_dir <- paste(data_dir0, i, sub_rna_dir, sep = "/")
+      print(data_dir)
+      data <- Read10X(data.dir = data_dir)
+      data_S_list[[i]] <- CreateSeuratObject(counts = data$`Gene Expression`, project = i)
+    }
+  }
+  if (human_only){
+    for(i in names(data_S_list)){
+      data_S_list[[i]] <- data_S_list[[i]][grep("^hg19", rownames(data_S_list[[i]])), ]
+    }
+  }
+  if (T){
+    if (length(grep("^mt",rownames(data_S_list[[1]]))) > 0) pattern_mt <- "^mt"
+    if (length(grep("^MT",rownames(data_S_list[[1]]))) > 0) pattern_mt <- "^MT"
+    if (length(grep("^hg19-MT",rownames(data_S_list[[1]]))) > 0) pattern_mt <- "^hg19-MT"
+    print(pattern_mt)
+    for(i in names(data_S_list)){
+      data_S_list[[i]][["percent.mt"]] <- PercentageFeatureSet(
+        object = data_S_list[[i]], pattern = pattern_mt
+      )
+    }
+  }
   
-  custom_args <- list(useNA = "no") # could extend this list for more customization
-  
-  overlap_args <-  names(call) %in% names(custom_args) # handle overlapping args
-  if (!any(overlap_args)) call <- c(call, custom_args)
-  
-  do.call(table, call) # exectue table() with the custom settings
+  data_S_list
+}
+
+
+# 
+get_quality_vlnplot <- function(data_S_list, file = "./figure/quality_control.pdf", width=8,height=4,log = F){
+  pdf(file, width = width, height=height)
+  for(i in names(data_S_list)){
+    print(VlnPlot(data_S_list[[i]], idents = data_S_list[[i]]@meta.data$orig.ident, log = log,
+                  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size = 0.05))
+  }
+  dev.off()
 }
 
 get_output_name <- function(main_name, prefix = "", type = ""){
@@ -22,24 +95,6 @@ get_output_name <- function(main_name, prefix = "", type = ""){
     if (type == "data") return(paste0("./data/", prefix, "_", main_name))
     if (type == "figure") return(paste0("./figure/", prefix, "_", main_name))
   }
-}
-
-get_quality_vlnplot_v0 <- function(data_S_list, file = "./figure/quality_control.pdf"){
-  pdf(file, width = 8, height=4)
-  for(i in names(data_S_list)){
-    print(VlnPlot(data_S_list[[i]], idents = data_S_list[[i]]@meta.data$orig.ident, log =T,
-                  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size = 0.25))
-  }
-  dev.off()
-}
-
-get_quality_vlnplot <- function(data_S_list, file = "./figure/quality_control.pdf", log = F){
-  pdf(file, width = 8, height=4)
-  for(i in names(data_S_list)){
-    print(VlnPlot(data_S_list[[i]], idents = data_S_list[[i]]@meta.data$orig.ident, log = log,
-                  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size = 0.05))
-  }
-  dev.off()
 }
 
 get_metric_summary <- function(data_S_list, data_S_updated_list = NULL, ngene_lth = 500, ntranscript_lth = 1000){
@@ -73,7 +128,8 @@ get_metric_summary <- function(data_S_list, data_S_updated_list = NULL, ngene_lt
   metric_df
 }
 
-FilterCells <- function(data_S_list, ngene_lth = NULL, ngene_hth = NULL, mt_hth, ngene_lqth = NULL, ngene_hqth = NULL){
+
+FilterCells <- function(data_S_list, ngene_lth = NULL, ngene_hth = NULL, mt_hth, nRNA_lth = NULL, nRNA_hth = NULL, ngene_lqth = NULL, ngene_hqth = NULL){
   if (is.null(ngene_lth)){
     for(i in names(data_S_list)){
       data_S_list[[i]]$ngene_lth <- quantile(data_S_list[[i]]$nFeature_RNA,ngene_lqth)
@@ -91,63 +147,16 @@ FilterCells <- function(data_S_list, ngene_lth = NULL, ngene_hth = NULL, mt_hth,
       data_S_list[[i]]$ngene_lth <- ngene_lth
       data_S_list[[i]]$ngene_hth <- ngene_hth
       data_S_list[[i]]$mt_hth <- mt_hth
+      data_S_list[[i]]$nRNA_lth <- nRNA_lth
+      data_S_list[[i]]$nRNA_hth <- nRNA_hth
       data_S_list[[i]] <- subset(
         x = data_S_list[[i]], 
-        subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt <= mt_hth
+        subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt < mt_hth & nCount_RNA > nRNA_lth & nCount_RNA < nRNA_hth
       )
       data_S_list[[i]] <- RenameCells(data_S_list[[i]], add.cell.id = i)
     }
   }
   
-  data_S_list
-}
-
-Load10xData <- function(data_dir, sample_names, sub_rna_dir = "filtered_feature_bc_matrix", with.protein = F, with.tcr = F, sub_tcr_dir = "TCR", human_only = F){
-  data_S_list <- list()
-  data_dir0 <- data_dir
-  if (!with.protein){
-    for(i in sample_names){
-      data_dir <- paste(data_dir0, i, sub_rna_dir, sep = "/")
-      print(data_dir)
-      data_S_list[[i]] <- CreateSeuratObject(Read10X(data.dir = data_dir), project = i)
-    }
-  }
-  if (with.protein){
-    # For output from CellRanger >= 3.0 with multiple data types
-    #list.files(data_dir) # Should show barcodes.tsv.gz, features.tsv.gz, and matrix.mtx.gz
-    data_dir0 <- data_dir
-    for(i in sample_names){
-      data_dir <- paste(data_dir0, i, sub_rna_dir, sep = "/")
-      print(data_dir)
-      data <- Read10X(data.dir = data_dir)
-      data_S_list[[i]] <- CreateSeuratObject(counts = data$`Gene Expression`, project = i)
-      data_S_list[[i]][["ADT"]] <- CreateAssayObject(counts = data$`Antibody Capture`)
-    }
-  }
-  if (with.tcr){
-    for(i in sample_names){
-      data_dir <- paste(data_dir0, i, sub_tcr_dir, sep = "/")
-      print(data_dir)
-      data_S_list[[i]] <- add_clonotype(data_S_list[[i]], data_dir)
-    }
-  }
-  if (human_only){
-    for(i in names(data_S_list)){
-      data_S_list[[i]] <- data_S_list[[i]][grep("^hg19", rownames(data_S_list[[i]])), ]
-    }
-  }
-  if (T){
-    if (length(grep("^mt",rownames(data_S_list[[1]]))) > 0) pattern_mt <- "^mt"
-    if (length(grep("^MT",rownames(data_S_list[[1]]))) > 0) pattern_mt <- "^MT"
-    if (length(grep("^hg19-MT",rownames(data_S_list[[1]]))) > 0) pattern_mt <- "^hg19-MT"
-    print(pattern_mt)
-    for(i in names(data_S_list)){
-      data_S_list[[i]][["percent.mt"]] <- PercentageFeatureSet(
-        object = data_S_list[[i]], pattern = pattern_mt
-      )
-    }
-  }
- 
   data_S_list
 }
 
@@ -160,93 +169,6 @@ MergeData <- function(data_S_list){
   data_S
 }
 
-add_clonotype_v0 <- function(seurat_obj, tcr_folder,  prefix = ""){
-  tcr_orig <- read.csv(paste(tcr_folder,"filtered_contig_annotations.csv", sep="/"))
-  
-  # Remove the -1 at the end of each barcode.
-  # Subsets so only the first line of each barcode is kept,
-  # as each entry for given barcode will have same clonotype.
-  tcr_orig$barcode <- gsub("-1", "", tcr_orig$barcode)
-  tcr <- tcr_orig[!duplicated(tcr_orig$barcode), ]
-  
-  # Only keep the barcode and clonotype columns. 
-  # We'll get additional clonotype info from the clonotype table.
-  tcr <- tcr[,c("barcode", "raw_clonotype_id")]
-  names(tcr)[names(tcr) == "raw_clonotype_id"] <- "clonotype_id"
-  
-  # Clonotype-centric info.
-  clono <- read.csv(paste(tcr_folder,"clonotypes.csv", sep="/"))
-  
-  # Slap the AA sequences onto our original table by clonotype_id.
-  tcr <- merge(tcr, clono[, c("clonotype_id", "cdr3s_aa")])
-  
-  # Reorder so barcodes are first column and set them as rownames.
-  extract_TRB <- function(barcode, trb_dat){
-    cdr3 <- trb_dat[trb_dat$barcode == barcode,]$cdr3
-    if (all(cdr3 == "None") | is.null(cdr3)) return("")
-    else paste(sort(unique(cdr3[cdr3 != "None"])), collapse = "_")
-  }
-  rownames(tcr) <- paste0(prefix,tcr$barcode)
-  tcr <- tcr[, c("clonotype_id", "cdr3s_aa")]
-  tcr_orig_trb <- tcr_orig[tcr_orig$chain == "TRB",]
-  tcr$TRB_aa <- as.factor(sapply(rownames(tcr), FUN = function(x){extract_TRB(x, tcr_orig_trb)}))
-
-  # Add to the Seurat object's metadata.
-  clono_seurat <- AddMetaData(object=seurat_obj, metadata=tcr)
-  return(clono_seurat)
-}
-
-add_clonotype <- function(seurat_obj, tcr_folder,  prefix = ""){
-  #tcr_folder <- data_dir
-  tcr_orig <- read.csv(paste(tcr_folder,"filtered_contig_annotations.csv", sep="/"), stringsAsFactors = F)
-  names(tcr_orig)[names(tcr_orig) == "raw_clonotype_id"] <- "clonotype_id"
-  clono <- read.csv(paste(tcr_folder,"clonotypes.csv", sep="/"), stringsAsFactors = F)
-  tcr_orig <- merge(tcr_orig, clono)
-  tcr_orig_trb <- tcr_orig[tcr_orig$chain == "TRB",]
-  tcr_orig_tra <- tcr_orig[tcr_orig$chain == "TRA",]
-  valid_barcodes <- names(which(table(tcr_orig_trb$barcode) == 1))
-  print(paste(length(valid_barcodes), "valid barcodes with unique TRB are found."))
-  #length(names(which(table(tcr_orig_tra$barcode) == 1)))
-  #length(intersect(names(which(table(tcr_orig_trb$barcode) == 1)),
-  #                 names(which(table(tcr_orig_tra$barcode) == 1))))
-  selected_tcr_orig_trb <- tcr_orig_trb[which(tcr_orig_trb$barcode %in% valid_barcodes),]
-  selected_tcr_orig_trb_to_incorp <- data.frame(clonotype_id = selected_tcr_orig_trb$clonotype_id,
-                                                contig_id = selected_tcr_orig_trb$contig_id,
-                                                v_gene_TRB = selected_tcr_orig_trb$v_gene,
-                                                d_gene_TRB = selected_tcr_orig_trb$d_gene,
-                                                j_gene_TRB = selected_tcr_orig_trb$j_gene,
-                                                c_gene_TRB = selected_tcr_orig_trb$c_gene,
-                                                cdr3_TRB = selected_tcr_orig_trb$cdr3,
-                                                cdr3_nt_TRB = selected_tcr_orig_trb$cdr3_nt,
-                                                cdr3s_aa = selected_tcr_orig_trb$cdr3s_aa,
-                                                cdr3s_nt = selected_tcr_orig_trb$cdr3s_nt)
-  rownames(selected_tcr_orig_trb_to_incorp) <- selected_tcr_orig_trb$barcode
-  clono_seurat <- AddMetaData(object=seurat_obj, metadata=selected_tcr_orig_trb_to_incorp)
-  
-  selected_tcr_orig_tra_to_incorp <- data.frame(clonotype_id = selected_tcr_orig_trb$clonotype_id,
-                                                v_gene_TRA = NA,
-                                                d_gene_TRA = NA,
-                                                j_gene_TRA = NA,
-                                                c_gene_TRA = NA,
-                                                cdr3_TRA = NA,
-                                                cdr3_nt_TRA = NA)
-  rownames(selected_tcr_orig_tra_to_incorp) <- rownames(selected_tcr_orig_trb_to_incorp)
-  for (i in rownames(selected_tcr_orig_tra_to_incorp)){
-    selected_tcr_orig_tra_to_incorp[i, "v_gene_TRA"] = paste(tcr_orig_tra[tcr_orig_tra$barcode == i, "v_gene"], collapse = ";")
-    selected_tcr_orig_tra_to_incorp[i, "d_gene_TRA"] = paste(tcr_orig_tra[tcr_orig_tra$barcode == i, "d_gene"], collapse = ";")
-    selected_tcr_orig_tra_to_incorp[i, "j_gene_TRA"] = paste(tcr_orig_tra[tcr_orig_tra$barcode == i, "j_gene"], collapse = ";")
-    selected_tcr_orig_tra_to_incorp[i, "c_gene_TRA"] = paste(tcr_orig_tra[tcr_orig_tra$barcode == i, "c_gene"], collapse = ";")
-    selected_tcr_orig_tra_to_incorp[i, "cdr3_TRA"] = paste(tcr_orig_tra[tcr_orig_tra$barcode == i, "cdr3"], collapse = ";")
-    selected_tcr_orig_tra_to_incorp[i, "cdr3_nt_TRA"] = paste(tcr_orig_tra[tcr_orig_tra$barcode == i, "cdr3_nt"], collapse = ";")
-  }
-  selected_tcr_orig_tra_to_incorp[] <- lapply(selected_tcr_orig_tra_to_incorp, factor)
-  clono_seurat <- AddMetaData(object=clono_seurat, metadata=selected_tcr_orig_tra_to_incorp)
-  #clono_seurat$v_gene_TRB[1:10]
-  #clono_seurat$v_gene_TRA[1:10]
-  return(clono_seurat)
-}
-
-############
 FindDEGs <- function(object, group.by = "all", compare.by = "orig.ident", assay = "RNA", features = NULL, min.cell = 25, 
                      min.pct = 0.01, logfc.threshold = log(2), pseudocount.use = 0.01, ...){
   #object <- sub_data_S
@@ -276,428 +198,614 @@ FindDEGs <- function(object, group.by = "all", compare.by = "orig.ident", assay 
     #cluster_markers <- cbind(cluster_markers, AverageExpression(object, features = rownames(cluster_markers)), assays = assay)
     
     #for (compare_i in unique(object[[compare.by]][,1])){
-      #sub_dat <- slot(object[, which(object[[compare.by]] == compare_i)]@assays[[assay]], name = "data")[rownames(cluster_markers),]
-      #cluster_markers[, paste0("avg_", compare_i)] <- apply(sub_dat, 1, mean)
+    #sub_dat <- slot(object[, which(object[[compare.by]] == compare_i)]@assays[[assay]], name = "data")[rownames(cluster_markers),]
+    #cluster_markers[, paste0("avg_", compare_i)] <- apply(sub_dat, 1, mean)
     #}
     DEGs_list[[group_i]] <- cluster_markers
   }
   DEGs_list
 }
 
-SaveDEGs <- function(DEGs_list, path = "./data/differential_analysis/", prefix = "", suffix = "_DEGs", format = "xlsx", ...){
-  if (!dir.exists(path)) dir.create(path)
-  if (format == "xlsx"){
-    require(openxlsx)
-    for(i in names(DEGs_list)){
-      DEGs_list[[i]] <- cbind(gene_name = rownames(DEGs_list[[i]]), DEGs_list[[i]])
-      write.xlsx(DEGs_list[[i]], paste0(path, prefix, i, suffix, ".", format))
-    }
+ProcessSingleSample <- function(data_S_list){
+  for(i in names(data_S_list)){
+    data_S_list[[i]] <- NormalizeData(data_S_list[[i]], normalization.method = "LogNormalize", scale.factor = 10000)
+    data_S_list[[i]] <- FindVariableFeatures(data_S_list[[i]], selection.method = "vst", nfeatures = 2000)
+    data_S_list[[i]] <- ScaleData(data_S_list[[i]])
+    data_S_list[[i]] <- RunPCA(data_S_list[[i]], features = VariableFeatures(object = data_S_list[[i]]))
   }
+  data_S_list
 }
 
-CreateIdentByGene <- function(object, gene_id, pos_lab = "+", neg_lab = "-", assay = "RNA", slot = "data"){
-  object[[gene_id]] <- ifelse(slot(object@assays[[assay]], slot)[gene_id, ] > 0, paste0(gene_id, pos_lab), paste0(gene_id, neg_lab))
-  object
+DoubletDetection <- function(data_S_list){
+  for(i in names(data_S_list)){
+    sweep.res.list <- paramSweep_v3(data_S_list[[i]], PCs = 1:30, sct = FALSE)
+    sweep.stats <- summarizeSweep(sweep.res.list, GT = FALSE)
+    bcmvn <- find.pK(sweep.stats)
+    mpK<-as.numeric(as.vector(bcmvn$pK[which.max(bcmvn$BCmetric)]))
+    pred_doub_percent <- nrow(data_S_list[[i]]@meta.data)*0.001*0.008
+    nExp_poi <- round(pred_doub_percent*nrow(data_S_list[[i]]@meta.data))
+    data_S_list[[i]] <- doubletFinder_v3(data_S_list[[i]], PCs = 1:30, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = FALSE)
+  }
+  data_S_list
+}
+
+scDoubletDetection <- function(data_S_list){
+  for(i in names(data_S_list)){
+    #convert to sce
+    data_sce <- as.SingleCellExperiment(data_S_list[[i]])
+    data_sce <- scDblFinder(data_sce)
+    data_S_list[[i]]$scDblFinder.class <- data_sce$scDblFinder.class
+    data_S_list[[i]]$scDblFinder.score <- data_sce$scDblFinder.score
+  }
+  data_S_list
 }
 
 
-suppressPackageStartupMessages({
-  library(rlang)
-})
-
-DoMultiBarHeatmap <- function (object, 
-                               features = NULL, 
-                               cells = NULL, 
-                               group.by = "ident", 
-                               additional.group.by = NULL, 
-                               group.bar = TRUE, 
-                               disp.min = -2.5, 
-                               disp.max = NULL, 
-                               slot = "scale.data", 
-                               assay = NULL, 
-                               label = TRUE, 
-                               size = 5.5, 
-                               hjust = 0, 
-                               angle = 45, 
-                               raster = TRUE, 
-                               draw.lines = TRUE, 
-                               lines.width = NULL, 
-                               group.bar.height = 0.02, 
-                               combine = TRUE) 
-{
-  cells <- cells %||% colnames(x = object)
-  if (is.numeric(x = cells)) {
-    cells <- colnames(x = object)[cells]
-  }
-  assay <- assay %||% DefaultAssay(object = object)
-  DefaultAssay(object = object) <- assay
-  features <- features %||% VariableFeatures(object = object)
-  ## Why reverse???
-  features <- rev(x = unique(x = features))
-  disp.max <- disp.max %||% ifelse(test = slot == "scale.data", 
-                                   yes = 2.5, no = 6)
-  possible.features <- rownames(x = GetAssayData(object = object, 
-                                                 slot = slot))
-  if (any(!features %in% possible.features)) {
-    bad.features <- features[!features %in% possible.features]
-    features <- features[features %in% possible.features]
-    if (length(x = features) == 0) {
-      stop("No requested features found in the ", slot, 
-           " slot for the ", assay, " assay.")
+ClusterMetricTable <- function(seu_obj, cluster_col, metric_cols){
+  for(col in metric_cols){
+    metric_table <- table(seu_obj@meta.data[[cluster_col]], seu_obj@meta.data[[col]])
+    write.table(metric_table, file = paste0("cluster_", col, "_metrics.txt"))
+    metric_df <- as.data.frame.matrix(metric_table) 
+    metric_df_long <- metric_df
+    #fixing error where numerical rownames are out of order
+    if(suppressWarnings(is.na(as.integer(rownames(metric_df)[1])))){
+      metric_df_long$cluster <- rownames(metric_df)
     }
-    warning("The following features were omitted as they were not found in the ", 
-            slot, " slot for the ", assay, " assay: ", paste(bad.features, 
-                                                             collapse = ", "))
-  }
-  data <- as.data.frame(x = as.matrix(x = t(x = GetAssayData(object = object, 
-                                                             slot = slot)[features, cells, drop = FALSE])))
-  
-  object <- suppressMessages(expr = StashIdent(object = object, 
-                                               save.name = "ident"))
-  group.by <- group.by %||% "ident"
-  groups.use <- object[[c(group.by, additional.group.by)]][cells, , drop = FALSE]
-  plots <- list()
-  for (i in group.by) {
-    data.group <- data
-    group.use <- groups.use[, c(i, additional.group.by), drop = FALSE]
-    
-    for(colname in colnames(group.use)){
-      if (!is.factor(x = group.use[[colname]])) {
-        group.use[[colname]] <- factor(x = group.use[[colname]])
-      }  
+    else{
+      metric_df_long$cluster <- as.integer(rownames(metric_df))
     }
-    
-    if (draw.lines) {
-      lines.width <- lines.width %||% ceiling(x = nrow(x = data.group) * 
-                                                0.0025)
-      placeholder.cells <- sapply(X = 1:(length(x = levels(x = group.use[[i]])) * 
-                                           lines.width), FUN = function(x) {
-                                             return(Seurat:::RandomName(length = 20))
-                                           })
-      placeholder.groups <- data.frame(foo=rep(x = levels(x = group.use[[i]]), times = lines.width))
-      placeholder.groups[additional.group.by] = NA
-      colnames(placeholder.groups) <- colnames(group.use)
-      rownames(placeholder.groups) <- placeholder.cells
-      
-      group.levels <- levels(x = group.use[[i]])
-      
-      group.use <- sapply(group.use, as.vector)
-      rownames(x = group.use) <- cells
-      
-      group.use <- rbind(group.use, placeholder.groups)
-      
-      na.data.group <- matrix(data = NA, nrow = length(x = placeholder.cells), 
-                              ncol = ncol(x = data.group), dimnames = list(placeholder.cells, 
-                                                                           colnames(x = data.group)))
-      data.group <- rbind(data.group, na.data.group)
-    }
-    
-    #group.use = group.use[order(group.use[[i]]), , drop=F]
-    group.use <- group.use[with(group.use, eval(parse(text=paste('order(', paste(c(i, additional.group.by), collapse=', '), ')', sep='')))), , drop=F]
-    
-    plot <- Seurat:::SingleRasterMap(data = data.group, raster = raster, 
-                                     disp.min = disp.min, disp.max = disp.max, feature.order = features, 
-                                     cell.order = rownames(x = group.use), group.by = group.use[[i]])
-    
-    if (group.bar) {
-      pbuild <- ggplot_build(plot = plot)
-      group.use2 <- group.use
-      cols <- list()
-      na.group <- Seurat:::RandomName(length = 20)
-      for (colname in rev(x = colnames(group.use2))){
-        if (colname == group.by){
-          colid = paste0('Identity (', colname, ')')
-        } else {
-          colid = colname
-        }
-        
-        if (draw.lines) {
-          levels(x = group.use2[[colname]]) <- c(levels(x = group.use2[[colname]]), na.group)  
-          group.use2[placeholder.cells, colname] <- na.group
-          cols[[colname]] <- c(scales::hue_pal()(length(x = levels(x = group.use[[colname]]))), "#FFFFFF")
-        } else {
-          cols[[colname]] <- c(scales::hue_pal()(length(x = levels(x = group.use[[colname]]))))
-        }
-        names(x = cols[[colname]]) <- levels(x = group.use2[[colname]])
-        
-        
-        y.range <- diff(x = pbuild$layout$panel_params[[1]]$y.range)
-        y.pos <- max(pbuild$layout$panel_params[[1]]$y.range) + y.range * 0.015
-        y.max <- y.pos + group.bar.height * y.range
-        pbuild$layout$panel_params[[1]]$y.range <- c(pbuild$layout$panel_params[[1]]$y.range[1], y.max)
-        
-        plot <- suppressMessages(plot + 
-                                   annotation_raster(raster = t(x = cols[[colname]][group.use2[[colname]]]),  xmin = -Inf, xmax = Inf, ymin = y.pos, ymax = y.max) + 
-                                   annotation_custom(grob = grid::textGrob(label = colid, hjust = 0, gp = grid::gpar(cex = 0.75)), ymin = mean(c(y.pos, y.max)), ymax = mean(c(y.pos, y.max)), xmin = Inf, xmax = Inf) +
-                                   coord_cartesian(ylim = c(0, y.max), clip = "off")) 
-        
-        #temp <- as.data.frame(cols[[colname]][levels(group.use[[colname]])])
-        #colnames(temp) <- 'color'
-        #temp$x <- temp$y <- 1
-        #temp[['name']] <- as.factor(rownames(temp))
-        
-        #temp <- ggplot(temp, aes(x=x, y=y, fill=name)) + geom_point(shape=21, size=5) + labs(fill=colname) + theme(legend.position = "bottom")
-        #legend <- get_legend(temp)
-        #multiplot(plot, legend, heights=3,1)
-        
-        if ((colname == group.by) && label) {
-          x.max <- max(pbuild$layout$panel_params[[1]]$x.range)
-          x.divs <- pbuild$layout$panel_params[[1]]$x.major %||% pbuild$layout$panel_params[[1]]$x$break_positions()
-          group.use$x <- x.divs
-          label.x.pos <- tapply(X = group.use$x, INDEX = group.use[[colname]],
-                                FUN = median) * x.max
-          label.x.pos <- data.frame(group = names(x = label.x.pos), 
-                                    label.x.pos)
-          plot <- plot + geom_text(stat = "identity", 
-                                   data = label.x.pos, aes_string(label = "group", 
-                                                                  x = "label.x.pos"), y = y.max + y.max * 
-                                     0.03 * 0.5, angle = angle, hjust = hjust, 
-                                   size = size)
-          plot <- suppressMessages(plot + coord_cartesian(ylim = c(0, 
-                                                                   y.max + y.max * 0.002 * max(nchar(x = levels(x = group.use[[colname]]))) * 
-                                                                     size), clip = "off"))
-        }
-      }
-    }
-    plot <- plot + theme(line = element_blank())
-    plots[[i]] <- plot
+    metric_df_long <- melt(metric_df_long, id.vars = "cluster")
+    colnames(metric_df_long)[colnames(metric_df_long) == "value"] ="cell_counts"
+    colnames(metric_df_long)[colnames(metric_df_long) == "variable"] ="sample_id"
+    return(metric_df_long)
   }
-  if (combine) {
-    plots <- CombinePlots(plots = plots)
-  }
-  return(plots)
 }
 
 
 
+# preprocess the data all the way to clustering
+preprocessing2clustering <- function(sample_data_dir,
+                                     processed_data_dir,
+                                     sample_metadata,
+                                     ngene_lth = 500, 
+                                     ngene_hth = 7500, 
+                                     mt_hth = 10){
+  
+  library(Seurat) # packageVersion("Seurat") ‘4.1.1’
+  library(scales)
+  library(cowplot)
+  library(ggplot2)
+  library(biomaRt)
+  library(dplyr)
+  library(viridis)
+  library(grid)
+  #library(ggpubr)
+  
+  
+  # 1. data loading: all the samples and RNA only
+  sample_names <- list.dirs(sample_data_dir, full.names = F, recursive = F)
+  sample_names
+  data_S_list_v0 <- Load10xData(sample_data_dir, sample_names,with.multiome.rna.only = T) 
+  
+  # 2. Quality control
+  setwd(processed_data_dir)
+  dir.create(file.path(processed_data_dir, "figure/"), showWarnings = TRUE)
+  
+  prefix <- "all"
+  get_quality_vlnplot(data_S_list_v0, file = get_output_name("quality_vlnplot.pdf", prefix, "figure"),width = 8,height=12)
+  
+  # TODO: calibrate these thresholds
+  message(paste0("Filtering cells with thresholds - ngene_lth: ",ngene_lth," ngene_hth: ",ngene_hth," mt_hth: ",mt_hth))
+  data_S_list <- FilterCells(data_S_list_v0, ngene_lth = ngene_lth, ngene_hth = ngene_hth, mt_hth = mt_hth)
+  metric_report <- get_metric_summary(data_S_list_v0, data_S_list)
+  message("Writing QC metrics")
+  write.csv(metric_report, file = get_output_name("metric_summary.csv", prefix), quote = F)
+  
+  #Process Sample for doublet detection
+  data_S_list <- ProcessSingleSample(data_S_list)
+  
+  #Doublet_Detection using DoubletFinder --> this step can take some time
+  data_S_list <- scDoubletDetection(data_S_list)
+  
+  #save individual objects with doublets
+  saveRDS(data_S_list, file = paste0(processed_data_dir,"/raw_individual_doublets.rds"))
+  
+  
+  # 3. Merge data:
+  message("Merging seurat objects")
+  data_S <- MergeData(data_S_list)
+  rm(data_S_list_v0)
+  rm(data_S_list)
+  
+  #save object with doublets
+  saveRDS(data_S, file = paste0(processed_data_dir,"/raw_merged_doublets.rds"))
+  
+  # remove doublets
+  data_S <- subset(data_S,cells=colnames(data_S)[data_S@meta.data$scDblFinder.class == "singlet"])
+  
+  # 4. Data normalization and dimensionality reduction
+  DefaultAssay(data_S) <- "RNA"
+  data_S <- NormalizeData(data_S)
+  data_S <- FindVariableFeatures(data_S)
+  data_S <- ScaleData(data_S)
+  data_S <- RunPCA(data_S, npcs = 30, verbose = F)
+  
+  matching_conditions <- sample_metadata$sample_ids
+  names(matching_conditions) <- sample_metadata$sample_names
+  data_S$condition <- matching_conditions[data_S$orig.ident]
+  
+  
+  
+  
+  # 5. Data Integration (for visualization and perhaps better cell type annotation)
+  
+  data.combined <- CreateSeuratObject(counts = data_S@assays$RNA@counts,
+                                      meta.data = data_S@meta.data)
+  data.list <- SplitObject(data.combined, split.by = "condition")
+  rm(data.combined)
+  data.list <- lapply(X = data.list, FUN = function(x) {
+    x <- NormalizeData(x, verbose = FALSE)
+    x <- FindVariableFeatures(x, verbose = FALSE)
+  })
+  features <- SelectIntegrationFeatures(object.list = data.list)
+  data.list <- lapply(X = data.list, FUN = function(x) {
+    x <- ScaleData(x, features = features, verbose = FALSE)
+    x <- RunPCA(x, features = features, verbose = FALSE)
+  })
+  
+  anchors <- FindIntegrationAnchors(object.list = data.list,  reduction = "rpca")
+  data.integrated <- IntegrateData(anchorset = anchors)
+  data.integrated <- ScaleData(data.integrated, verbose = FALSE)
+  data.integrated <- RunPCA(data.integrated,npcs = 30, verbose = FALSE)
+  data.integrated <-  RunTSNE(
+    data.integrated, tsne.method = "FIt-SNE", check_duplicates = FALSE, do.fast = TRUE, seed.use=3, dims = 1:30, perplexity = 100,
+    fast_tsne_path="/bin/fast_tsne", ann_not_vptree=FALSE, nthreads=12
+  )
+  rm(anchors)
+  rm(data.list)
+  
+  
+  matching_conditions2 <- sample_metadata$condition
+  names(matching_conditions2) <- sample_metadata$sample_names
+  data.integrated$label <- matching_conditions2[data.integrated$orig.ident]
+  
+  
+  # 6. clustering
+  DefaultAssay(data.integrated) <- "integrated"
+  data.integrated <- FindNeighbors(data.integrated, dims = 1:30)
+  
+  # try several resolutions: 0.1, 0.3, 0.5, 0.7, 0.9
+  clustering_res <- c(0.1,0.3,0.5,0.7,0.9)
+  for (res in clustering_res) {
+    message(paste0("Louvain Clustering with resolution: ",res))
+    data.integrated <- FindClusters(data.integrated, resolution = res)
+  }
+  
+  #data.integrated$integrated_cluster <- data.integrated$integrated_snn_res.0.3 #integrated
+  DefaultAssay(data.integrated) <- "RNA"
+  # 7. save the seurat object
+  saveRDS(data.integrated,file = paste0(processed_data_dir,"/seurat_integrate_cluster.RDS"))
+  writeLines(capture.output(sessionInfo()), paste0(processed_data_dir,"/sessionInfo.txt"))
+}
 
-suppressPackageStartupMessages({
-  library(rlang)
-})
+StackedVlnMarkerPlot2 <- function(features_df, seu_obj, plot_name, col_name){
+  #get the total list of genes and make sure features selected
+  #are in the list
+  features_df$grouping <- as.factor(features_df$grouping)
+  all.genes <- row.names(seu_obj)
+  features <- features_df$Feat[(features_df$Feat %in% all.genes)]
+  
+  #get the metadata of object for cluster information
+  cell_meta <- seu_obj@meta.data
+  cluster_info <- cell_meta[c(col_name)]
+  counts <- as.data.frame(as.matrix(seu_obj@assays$RNA@data[features,]))
+  counts <- t(counts)
+  count_cluster_df <- merge(counts, cluster_info,  by = 'row.names', all = TRUE)
+  #return(count_cluster_df)
+  count_cluster_df$Cell <- count_cluster_df$Row.names
+  count_cluster_df$Idents <- count_cluster_df[[col_name]]
+  
+  count_cluster_df <- reshape2::melt(count_cluster_df, id.vars = c("Cell","Idents"), measure.vars = features,
+                                     variable.name = "Feat", value.name = "Expr")
+  
+  count_cluster_df <- left_join(count_cluster_df,features_df, by="Feat")
+  #return(count_cluster_df)
+  
+  #need to refactor if you have subsetted
+  count_cluster_df$Idents <- factor(count_cluster_df$Idents)
+  
+  avg <- sapply(X = split(x = count_cluster_df, f = count_cluster_df$Idents),
+                FUN = function(df) { return(tapply(X = df$Expr, INDEX = df$Feat, FUN = mean)) })
+  
+  
+  L2Norm <- function(mat, MARGIN){
+    normalized <- sweep(x = mat, MARGIN = MARGIN,
+                        STATS = apply(X = mat, MARGIN = MARGIN,
+                                      FUN = function(x){ sqrt(x = sum(x ^ 2)) }), FUN = "/")
+    normalized[!is.finite(x = normalized)] <- 0
+    return(normalized)
+  }
+  
+  # Performs hierarchical clustering
+  idents.order <- hclust(d = dist(t(L2Norm(mat = avg, MARGIN = 2))))$order
+  avg <- avg[,idents.order]
+  avg <- L2Norm(mat = avg, MARGIN = 1)
+  mat <- hclust(d = dist(avg))$merge
+  
+  # Order feature clusters by position of their "rank-1 idents"
+  position <- apply(X = avg, MARGIN = 1, FUN = which.max)
+  orderings <- list()
+  for (i in 1:nrow(mat)) {
+    x <- if (mat[i,1] < 0) -mat[i,1] else orderings[[mat[i,1]]]
+    y <- if (mat[i,2] < 0) -mat[i,2] else orderings[[mat[i,2]]]
+    x.pos <- min(x = position[x])
+    y.pos <- min(x = position[y])
+    orderings[[i]] <- if (x.pos < y.pos) { c(x, y) } else { c(y, x) }
+  }
+  #features.order <- orderings[[length(orderings)]]
+  
+  # Update Feature and Identity factor orders
+  count_cluster_df$Idents <- factor(count_cluster_df$Idents, levels = levels(count_cluster_df$Idents)[idents.order])
+  #count_cluster_df$Feat <- factor(count_cluster_df$Feat, levels = levels(count_cluster_df$Feat)[features.order])
+  
+  #feature_labeller <- as_labeller(variable,value)
+  
+  # Plot stacked violin plot with reordered identity classes and features - horizontal
+  f <- ggplot(count_cluster_df, aes(Expr, factor(Idents), fill = Feat)) +
+    geom_violin(scale = "width", adjust = 1, trim = TRUE) +
+    scale_x_continuous(expand = c(0, 0), labels = function(x)
+      c(rep(x = "", times = length(x)-2), x[length(x) - 1], "")) +
+    facet_grid(cols = vars(grouping, Feat), scales = "free")  +
+    theme_cowplot(font_size = 12) +
+    theme(legend.position = "none", panel.spacing = unit(0, "lines"),
+          plot.title = element_text(hjust = 0.5),
+          panel.background = element_rect(fill = NA, color = "black"),
+          strip.background = element_blank(),
+          strip.text = element_text(face = "bold"),
+          strip.text.x.top = element_text(angle = 90, hjust = 0, vjust = 0.5)) +
+    ggtitle(plot_name) + xlab("Expression Level") + ylab("Identity")
+  
+  metric_table <- ClusterMetricTable(seu_obj, col_name, c("condition", "label"))
+  #return(metric_table)
+  metric_table$cluster <- as.factor(metric_table$cluster)
+  metric_table$cluster <- factor(metric_table$cluster, levels = levels(metric_table$cluster)[idents.order])
+  
+  #add total counts
+  totals <- metric_table %>%
+    group_by(cluster) %>%
+    summarize(total = sum(cell_counts))
+  
+  t <- ggplot(metric_table) +
+    aes(x = cluster, y = cell_counts, fill = sample_id, label = sample_id) +
+    geom_bar(position = "fill", stat = "identity") +
+    scale_fill_hue(direction = 1) +
+    labs(x = "cluster", title = "Cell Counts (Percentage)") +
+    theme_minimal() +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold")
+    ) +
+    geom_text(data=totals, aes(x=cluster, label=total, y=total, fill=NULL), position = position_fill(vjust = -0.05)) +
+    coord_flip()
+  
+  return(f)
+}
 
-DoMultiBarHeatmap <- function (object, 
-                               features = NULL, 
-                               cells = NULL, 
-                               group.by = "ident", 
-                               additional.group.by = NULL, 
-                               additional.group.sort.by = NULL, 
-                               cols.use = NULL,
-                               group.bar = TRUE, 
-                               disp.min = -2.5, 
-                               disp.max = NULL, 
-                               slot = "scale.data", 
-                               assay = NULL, 
-                               label = TRUE, 
-                               size = 5.5, 
-                               hjust = 0, 
-                               angle = 45, 
-                               raster = TRUE, 
-                               draw.lines = TRUE, 
-                               lines.width = NULL, 
-                               group.bar.height = 0.02, 
-                               combine = TRUE) 
-{
-  cells <- cells %||% colnames(x = object)
-  if (is.numeric(x = cells)) {
-    cells <- colnames(x = object)[cells]
-  }
-  assay <- assay %||% DefaultAssay(object = object)
-  DefaultAssay(object = object) <- assay
-  features <- features %||% VariableFeatures(object = object)
-  ## Why reverse???
-  features <- rev(x = unique(x = features))
-  disp.max <- disp.max %||% ifelse(test = slot == "scale.data", 
-                                   yes = 2.5, no = 6)
-  possible.features <- rownames(x = GetAssayData(object = object, 
-                                                 slot = slot))
-  if (any(!features %in% possible.features)) {
-    bad.features <- features[!features %in% possible.features]
-    features <- features[features %in% possible.features]
-    if (length(x = features) == 0) {
-      stop("No requested features found in the ", slot, 
-           " slot for the ", assay, " assay.")
-    }
-    warning("The following features were omitted as they were not found in the ", 
-            slot, " slot for the ", assay, " assay: ", paste(bad.features, 
-                                                             collapse = ", "))
+StackedVlnMarkerPlot3 <- function(features_df, seu_obj, plot_name, col_name,feat_level){
+  #get the total list of genes and make sure features selected
+  #are in the list
+  #features_df$grouping <- as.factor(features_df$grouping)
+  all.genes <- row.names(seu_obj)
+  features <- features_df$Feat[(features_df$Feat %in% all.genes)]
+  
+  #get the metadata of object for cluster information
+  cell_meta <- seu_obj@meta.data
+  cluster_info <- cell_meta[c(col_name)]
+  counts <- as.data.frame(as.matrix(seu_obj@assays$RNA@data[features,]))
+  counts <- t(counts)
+  count_cluster_df <- merge(counts, cluster_info,  by = 'row.names', all = TRUE)
+  #return(count_cluster_df)
+  count_cluster_df$Cell <- count_cluster_df$Row.names
+  count_cluster_df$Idents <- count_cluster_df[[col_name]]
+  
+  count_cluster_df <- reshape2::melt(count_cluster_df, id.vars = c("Cell","Idents"), measure.vars = features,
+                                     variable.name = "Feat", value.name = "Expr")
+  
+  count_cluster_df <- left_join(count_cluster_df,features_df, by="Feat")
+  #return(count_cluster_df)
+  
+  #need to refactor if you have subsetted
+  #count_cluster_df$Idents <- factor(count_cluster_df$Idents)
+  
+  #avg <- sapply(X = split(x = count_cluster_df, f = count_cluster_df$Idents),
+  #              FUN = function(df) { return(tapply(X = df$Expr, INDEX = df$Feat, FUN = mean)) })
+  
+  
+  #L2Norm <- function(mat, MARGIN){
+  #  normalized <- sweep(x = mat, MARGIN = MARGIN,
+  #                      STATS = apply(X = mat, MARGIN = MARGIN,
+  #                                    FUN = function(x){ sqrt(x = sum(x ^ 2)) }), FUN = "/")
+  #  normalized[!is.finite(x = normalized)] <- 0
+  #  return(normalized)
+  #}
+  
+  # Performs hierarchical clustering
+  #idents.order <- hclust(d = dist(t(L2Norm(mat = avg, MARGIN = 2))))$order
+  #avg <- avg[,idents.order]
+  #avg <- L2Norm(mat = avg, MARGIN = 1)
+  #mat <- hclust(d = dist(avg))$merge
+  
+  # Order feature clusters by position of their "rank-1 idents"
+  #position <- apply(X = avg, MARGIN = 1, FUN = which.max)
+  #orderings <- list()
+  #for (i in 1:nrow(mat)) {
+  #  x <- if (mat[i,1] < 0) -mat[i,1] else orderings[[mat[i,1]]]
+  #  y <- if (mat[i,2] < 0) -mat[i,2] else orderings[[mat[i,2]]]
+  #  x.pos <- min(x = position[x])
+  #  y.pos <- min(x = position[y])
+  #  orderings[[i]] <- if (x.pos < y.pos) { c(x, y) } else { c(y, x) }
+  #}
+  #features.order <- orderings[[length(orderings)]]
+  
+  # Update Feature and Identity factor orders
+  #count_cluster_df$Idents <- factor(count_cluster_df$Idents, levels = ident_level)
+  count_cluster_df$Feat <- factor(count_cluster_df$Feat, levels = feat_level)
+  
+  #feature_labeller <- as_labeller(variable,value)
+  
+  # Plot stacked violin plot with reordered identity classes and features - horizontal
+  f <- ggplot(count_cluster_df, aes(Expr, Idents, fill = Feat)) +
+    geom_violin(scale = "width", adjust = 1, trim = TRUE) +
+    scale_x_continuous(expand = c(0, 0), labels = function(x)
+      c(rep(x = "", times = length(x)-2), x[length(x) - 1], "")) +
+    facet_grid(cols = vars(Feat), scales = "free")  +
+    theme_cowplot(font_size = 12) +
+    theme(legend.position = "none", panel.spacing = unit(0, "lines"),
+          plot.title = element_text(hjust = 0.5),
+          panel.background = element_rect(fill = NA, color = "black"),
+          strip.background = element_blank(),
+          strip.text = element_text(face = "bold"),
+          strip.text.x.top = element_text(angle = 90, hjust = 0, vjust = 0.5)) +
+    ggtitle(plot_name) + xlab("Expression Level") + ylab("Identity")
+  
+  
+  
+  return(f)
+}
+
+StackedVlnMarkerPlot4 <- function(features_df, seu_obj, plot_name, col_name,sample_cols,cluster_level){
+  #get the total list of genes and make sure features selected
+  #are in the list
+  features_df$grouping <- as.factor(features_df$grouping)
+  all.genes <- row.names(seu_obj)
+  features <- features_df$Feat[(features_df$Feat %in% all.genes)]
+  
+  #get the metadata of object for cluster information
+  cell_meta <- seu_obj@meta.data
+  cluster_info <- cell_meta[c(col_name)]
+  counts <- as.data.frame(as.matrix(seu_obj@assays$RNA@data[features,]))
+  counts <- t(counts)
+  count_cluster_df <- merge(counts, cluster_info,  by = 'row.names', all = TRUE)
+  #return(count_cluster_df)
+  count_cluster_df$Cell <- count_cluster_df$Row.names
+  count_cluster_df$Idents <- count_cluster_df[[col_name]]
+  
+  count_cluster_df <- reshape2::melt(count_cluster_df, id.vars = c("Cell","Idents"), measure.vars = features,
+                                     variable.name = "Feat", value.name = "Expr")
+  
+  count_cluster_df <- left_join(count_cluster_df,features_df, by="Feat")
+  #return(count_cluster_df)
+  
+  #need to refactor if you have subsetted
+  count_cluster_df$Idents <- factor(count_cluster_df$Idents)
+  
+  avg <- sapply(X = split(x = count_cluster_df, f = count_cluster_df$Idents),
+                FUN = function(df) { return(tapply(X = df$Expr, INDEX = df$Feat, FUN = mean)) })
+  
+  
+  L2Norm <- function(mat, MARGIN){
+    normalized <- sweep(x = mat, MARGIN = MARGIN,
+                        STATS = apply(X = mat, MARGIN = MARGIN,
+                                      FUN = function(x){ sqrt(x = sum(x ^ 2)) }), FUN = "/")
+    normalized[!is.finite(x = normalized)] <- 0
+    return(normalized)
   }
   
-  if (!is.null(additional.group.sort.by)) {
-    if (any(!additional.group.sort.by %in% additional.group.by)) {
-      bad.sorts <- additional.group.sort.by[!additional.group.sort.by %in% additional.group.by]
-      additional.group.sort.by <- additional.group.sort.by[additional.group.sort.by %in% additional.group.by]
-      if (length(x = bad.sorts) > 0) {
-        warning("The following additional sorts were omitted as they were not a subset of additional.group.by : ", 
-                paste(bad.sorts, collapse = ", "))
-      }
-    }
-  }
+  # Performs hierarchical clustering
+  idents.order <- hclust(d = dist(t(L2Norm(mat = avg, MARGIN = 2))))$order
+  avg <- avg[,idents.order]
+  avg <- L2Norm(mat = avg, MARGIN = 1)
+  mat <- hclust(d = dist(avg))$merge
   
-  data <- as.data.frame(x = as.matrix(x = t(x = GetAssayData(object = object, 
-                                                             slot = slot)[features, cells, drop = FALSE])))
+  # Order feature clusters by position of their "rank-1 idents"
+  position <- apply(X = avg, MARGIN = 1, FUN = which.max)
+  orderings <- list()
+  for (i in 1:nrow(mat)) {
+    x <- if (mat[i,1] < 0) -mat[i,1] else orderings[[mat[i,1]]]
+    y <- if (mat[i,2] < 0) -mat[i,2] else orderings[[mat[i,2]]]
+    x.pos <- min(x = position[x])
+    y.pos <- min(x = position[y])
+    orderings[[i]] <- if (x.pos < y.pos) { c(x, y) } else { c(y, x) }
+  }
+  #features.order <- orderings[[length(orderings)]]
   
-  object <- suppressMessages(expr = StashIdent(object = object, 
-                                               save.name = "ident"))
-  group.by <- group.by %||% "ident"
-  groups.use <- object[[c(group.by, additional.group.by[!additional.group.by %in% group.by])]][cells, , drop = FALSE]
-  plots <- list()
-  for (i in group.by) {
-    data.group <- data
-    if (!is_null(additional.group.by)) {
-      additional.group.use <- additional.group.by[additional.group.by!=i]  
-      if (!is_null(additional.group.sort.by)){
-        additional.sort.use = additional.group.sort.by[additional.group.sort.by != i]  
-      } else {
-        additional.sort.use = NULL
-      }
-    } else {
-      additional.group.use = NULL
-      additional.sort.use = NULL
-    }
-    
-    group.use <- groups.use[, c(i, additional.group.use), drop = FALSE]
-    
-    for(colname in colnames(group.use)){
-      if (!is.factor(x = group.use[[colname]])) {
-        group.use[[colname]] <- factor(x = group.use[[colname]])
-      }  
-    }
-    
-    if (draw.lines) {
-      lines.width <- lines.width %||% ceiling(x = nrow(x = data.group) * 
-                                                0.0025)
-      placeholder.cells <- sapply(X = 1:(length(x = levels(x = group.use[[i]])) * 
-                                           lines.width), FUN = function(x) {
-                                             return(Seurat:::RandomName(length = 20))
-                                           })
-      placeholder.groups <- data.frame(rep(x = levels(x = group.use[[i]]), times = lines.width))
-      group.levels <- list()
-      group.levels[[i]] = levels(x = group.use[[i]])
-      for (j in additional.group.use) {
-        group.levels[[j]] <- levels(x = group.use[[j]])
-        placeholder.groups[[j]] = NA
-      }
-      
-      colnames(placeholder.groups) <- colnames(group.use)
-      rownames(placeholder.groups) <- placeholder.cells
-      
-      group.use <- sapply(group.use, as.vector)
-      rownames(x = group.use) <- cells
-      
-      group.use <- rbind(group.use, placeholder.groups)
-      
-      for (j in names(group.levels)) {
-        group.use[[j]] <- factor(x = group.use[[j]], levels = group.levels[[j]])
-      }
-      
-      na.data.group <- matrix(data = NA, nrow = length(x = placeholder.cells), 
-                              ncol = ncol(x = data.group), dimnames = list(placeholder.cells, 
-                                                                           colnames(x = data.group)))
-      data.group <- rbind(data.group, na.data.group)
-    }
-    
-    order_expr <- paste0('order(', paste(c(i, additional.sort.use), collapse=','), ')')
-    group.use = with(group.use, group.use[eval(parse(text=order_expr)), , drop=F])
-    
-    plot <- Seurat:::SingleRasterMap(data = data.group, raster = raster, 
-                                     disp.min = disp.min, disp.max = disp.max, feature.order = features, 
-                                     cell.order = rownames(x = group.use), group.by = group.use[[i]])
-    
-    if (group.bar) {
-      pbuild <- ggplot_build(plot = plot)
-      group.use2 <- group.use
-      cols <- list()
-      na.group <- Seurat:::RandomName(length = 20)
-      for (colname in rev(x = colnames(group.use2))) {
-        if (colname == i) {
-          colid = paste0('Identity (', colname, ')')
-        } else {
-          colid = colname
-        }
-        
-        # Default
-        cols[[colname]] <- c(scales::hue_pal()(length(x = levels(x = group.use[[colname]]))))  
-        
-        #Overwrite if better value is provided
-        if (!is_null(cols.use[[colname]])) {
-          req_length = length(x = levels(group.use))
-          if (length(cols.use[[colname]]) < req_length){
-            warning("Cannot use provided colors for ", colname, " since there aren't enough colors.")
-          } else {
-            if (!is_null(names(cols.use[[colname]]))) {
-              if (all(levels(group.use[[colname]]) %in% names(cols.use[[colname]]))) {
-                cols[[colname]] <- as.vector(cols.use[[colname]][levels(group.use[[colname]])])
-              } else {
-                warning("Cannot use provided colors for ", colname, " since all levels (", paste(levels(group.use[[colname]]), collapse=","), ") are not represented.")
-              }
-            } else {
-              cols[[colname]] <- as.vector(cols.use[[colname]])[c(1:length(x = levels(x = group.use[[colname]])))]
-            }
-          }
-        }
-        
-        # Add white if there's lines
-        if (draw.lines) {
-          levels(x = group.use2[[colname]]) <- c(levels(x = group.use2[[colname]]), na.group)  
-          group.use2[placeholder.cells, colname] <- na.group
-          cols[[colname]] <- c(cols[[colname]], "#FFFFFF")
-        }
-        names(x = cols[[colname]]) <- levels(x = group.use2[[colname]])
-        
-        y.range <- diff(x = pbuild$layout$panel_params[[1]]$y.range)
-        y.pos <- max(pbuild$layout$panel_params[[1]]$y.range) + y.range * 0.015
-        y.max <- y.pos + group.bar.height * y.range
-        pbuild$layout$panel_params[[1]]$y.range <- c(pbuild$layout$panel_params[[1]]$y.range[1], y.max)
-        
-        plot <- suppressMessages(plot + 
-                                   annotation_raster(raster = t(x = cols[[colname]][group.use2[[colname]]]),  xmin = -Inf, xmax = Inf, ymin = y.pos, ymax = y.max) + 
-                                   annotation_custom(grob = grid::textGrob(label = colid, hjust = 0, gp = gpar(cex = 0.75)), ymin = mean(c(y.pos, y.max)), ymax = mean(c(y.pos, y.max)), xmin = Inf, xmax = Inf) +
-                                   coord_cartesian(ylim = c(0, y.max), clip = "off")) 
-        
-        if ((colname == i) && label) {
-          x.max <- max(pbuild$layout$panel_params[[1]]$x.range)
-          x.divs <- pbuild$layout$panel_params[[1]]$x.major %||% pbuild$layout$panel_params[[1]]$x$break_positions()
-          #x.divs <- pbuild$layout$panel_params[[1]]$x.major
-          group.use$x <- x.divs
-          label.x.pos <- tapply(X = group.use$x, INDEX = group.use[[colname]],
-                                FUN = median) * x.max
-          label.x.pos <- data.frame(group = names(x = label.x.pos), 
-                                    label.x.pos)
-          plot <- plot + geom_text(stat = "identity", 
-                                   data = label.x.pos, aes_string(label = "group", 
-                                                                  x = "label.x.pos"), y = y.max + y.max * 
-                                     0.03 * 0.5, angle = angle, hjust = hjust, 
-                                   size = size)
-          plot <- suppressMessages(plot + coord_cartesian(ylim = c(0, 
-                                                                   y.max + y.max * 0.002 * max(nchar(x = levels(x = group.use[[colname]]))) * 
-                                                                     size), clip = "off"))
-        }
-      }
-    }
-    plot <- plot + theme(line = element_blank())
-    plots[[i]] <- plot
-  }
-  if (combine) {
-    plots <- CombinePlots(plots = plots)
-  }
-  return(plots)
+  # Update Feature and Identity factor orders
+  count_cluster_df$Idents <- factor(count_cluster_df$Idents, levels = levels(count_cluster_df$Idents)[idents.order])
+  #count_cluster_df$Feat <- factor(count_cluster_df$Feat, levels = levels(count_cluster_df$Feat)[features.order])
+  
+  #feature_labeller <- as_labeller(variable,value)
+  
+  # Plot stacked violin plot with reordered identity classes and features - horizontal
+  f <- ggplot(count_cluster_df, aes(Expr, factor(Idents), fill = Feat)) +
+    geom_violin(scale = "width", adjust = 1, trim = TRUE) +
+    scale_x_continuous(expand = c(0, 0), labels = function(x)
+      c(rep(x = "", times = length(x)-2), x[length(x) - 1], "")) +
+    facet_grid(cols = vars(grouping, Feat), scales = "free")  +
+    theme_cowplot(font_size = 12) +
+    theme(legend.position = "none", panel.spacing = unit(0, "lines"),
+          plot.title = element_text(hjust = 0.5),
+          panel.background = element_rect(fill = NA, color = "black"),
+          strip.background = element_blank(),
+          strip.text = element_text(face = "bold"),
+          strip.text.x.top = element_text(angle = 90, hjust = 0, vjust = 0.5)) +
+    ggtitle(plot_name) + xlab("Expression Level") + ylab("Identity")
+  
+  metric_table <- ClusterMetricTable(seu_obj, col_name, c("condition", "label"))
+  #return(metric_table)
+  metric_table$cluster <- factor(metric_table$cluster,levels=cluster_level)
+  #metric_table$cluster <- factor(metric_table$cluster, levels = levels(metric_table$cluster)[idents.order])
+  metric_table$condition <- factor(sapply(as.character(metric_table$sample_id),function(name) strsplit(name,split = "_")[[1]][1]))
+  
+  #add total counts
+  totals <- metric_table %>%
+    group_by(cluster) %>%
+    summarize(total = sum(cell_counts))
+  
+  t <- ggplot(metric_table) +
+    aes(x = cluster, y = cell_counts, fill = sample_id, label = sample_id,col=condition) +
+    geom_bar(position = "fill", stat = "identity") +
+    scale_fill_manual(values=sample_cols)+ 
+    labs(x = "cluster", title = "Cell Counts (Percentage)") +
+    theme_minimal() +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold")
+    ) +
+    geom_text(data=totals, aes(x=cluster, label=total, y=total, fill=NULL), position = position_fill(vjust = -0.05)) +
+    coord_flip()
+  
+  return(metric_table)
 }
 
 
+# Differntially Expressed Genes using Libra
+RunLibra <- function(SeuratObj, celltype_col_name, id_col_name, label_col_name, 
+                     num_replicates){
+  meta = subset(SeuratObj@meta.data, select=c(({{celltype_col_name}}), 
+                                              ({{id_col_name}}), ({{label_col_name}})))
+  colnames(meta)[which(colnames(meta)== ({{celltype_col_name}}))] = 'cell_type'
+  colnames(meta)[colnames(meta)==({{id_col_name}})] = 'replicate'
+  X = SeuratObj@assays$RNA@counts
+  #missing_cell_type = !(is.na(meta$cell_type))
+  #X = X[,missing_cell_type]
+  #meta = meta[missing_cell_type,]
+  DE = Libra::run_de(X,meta=meta,min_cells=50,min_reps={{num_replicates}},min_features=0)
+  return(DE)
+}
 
-FeaturePlotNew <- function(object, features, gradient = NULL, combine = T, ...){
-  if(is.null(gradient)){
-    gradient <- rev(brewer_pal(palette = "RdYlBu")(5))
-  }
-  if(combine){
-    plot_grid(plotlist = lapply(
-      FeaturePlot(object = object, features = features, combine = F, ...),
-      function(x) x + scale_color_gradientn(colors = gradient)
-    ))
-  }else{
-    lapply(
-      FeaturePlot(object = object, features = features, combine = F, ...),
-      function(x) x + scale_color_gradientn(colors = gradient)
-    )
-  }
+RunEdgeRPseudobulkBatchEffects <- function(SeuratObj, celltype_col_name, id_col_name, 
+                                           label_col_name, num_replicates,
+                                           batch_effect=TRUE){
+  #EdgeR LRT DE w/ batch effects, but Libra Formatting
+  meta = subset(SeuratObj@meta.data, select=c(({{celltype_col_name}}), 
+                                              ({{id_col_name}}), ({{label_col_name}})))
+  colnames(meta)[which(colnames(meta)== ({{celltype_col_name}}))] = 'cell_type'
+  colnames(meta)[colnames(meta)==({{id_col_name}})] = 'replicate'
+  X = SeuratObj@assays$RNA@counts
+  
+  pseudobulks = Libra::to_pseudobulk(
+    input = X,
+    meta = meta,
+    replicate_col = 'replicate',
+    cell_type_col = 'cell_type',
+    label_col = label_col_name,
+    min_cells = 50,
+    min_reps = {{num_replicates}},
+    min_features = 0,
+  )
+  
+  de_type='pseudobulk'
+  de_method='edgeR'
+  de_family='LRT'
+  
+  results = map(pseudobulks, function(x) {
+    # create targets matrix
+    
+    
+    # create design
+    
+    if (batch_effect){
+      targets = data.frame(group_sample = colnames(x)) %>%
+        mutate(group = gsub(".*\\:", "", group_sample)) %>% 
+        mutate(batch = gsub("\\D","", group_sample))
+      ## optionally, carry over factor levels from entire dataset
+      if (is.factor(meta$label)) {
+        targets$group %<>% factor(levels = levels(meta$label))
+      }
+      if (n_distinct(targets$group) > 2)
+        return(NULL)
+      design = model.matrix(~batch+group, data = targets)
+    }
+    else{
+      targets = data.frame(group_sample = colnames(x)) %>%
+        mutate(group = gsub(".*\\:", "", group_sample))
+      ## optionally, carry over factor levels from entire dataset
+      if (is.factor(meta$label)) {
+        targets$group %<>% factor(levels = levels(meta$label))
+      }
+      if (n_distinct(targets$group) > 2)
+        return(NULL)
+      design = model.matrix(~group, data = targets)
+    }
+    DE = tryCatch({
+      y = DGEList(counts = x, group = targets$group) %>%
+        calcNormFactors(method = 'TMM') %>%
+        estimateDisp(design)
+      test = {
+        fit = glmFit(y, design = design)
+        test = glmLRT(fit)
+      }
+      res = topTags(test, n = Inf) %>%
+        as.data.frame() %>%
+        rownames_to_column('gene') %>%
+        # flag metrics in results
+        mutate(de_family = 'pseudobulk',
+               de_method = de_method,
+               de_type = de_type)
+    }, error = function(e) {
+      message(e)
+      data.frame()
+    })
+    
+    
+  })
+  results %<>% bind_rows(.id = 'cell_type')
+  DE <- results
+  suppressWarnings(
+    colnames(DE) %<>%
+      fct_recode('p_val' = 'p.value',  ## DESeq2
+                 'p_val' = 'pvalue',  ## DESeq2
+                 'p_val' = 'p.value',  ## t/wilcox
+                 'p_val' = 'P.Value',  ## limma
+                 'p_val' = 'PValue'  , ## edgeR
+                 'p_val_adj' = 'padj', ## DESeq2/t/wilcox
+                 'p_val_adj' = 'adj.P.Val',      ## limma
+                 'p_val_adj' = 'FDR',            ## edgeER
+                 'avg_logFC' = 'log2FoldChange', ## DESEeq2
+                 'avg_logFC' = 'logFC', ## limma/edgeR
+                 'avg_logFC' = 'avg_log2FC' # Seurat V4
+      )
+  ) %>%
+    as.character()
+  
+  DE %<>%
+    # calculate adjusted p values
+    group_by(cell_type) %>%
+    mutate(p_val_adj = p.adjust(p_val, method = 'BH')) %>%
+    # make sure gene is a character not a factor
+    mutate(gene = as.character(gene)) %>%
+    # invert logFC to match Seurat level coding
+    mutate(avg_logFC = avg_logFC * -1) %>%
+    dplyr::select(cell_type,
+                  gene,
+                  avg_logFC,
+                  p_val,
+                  p_val_adj,
+                  de_family,
+                  de_method,
+                  de_type
+    ) %>%
+    ungroup() %>%
+    arrange(cell_type, gene)
+  return(DE)
 }
