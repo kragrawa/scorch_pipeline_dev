@@ -1,6 +1,7 @@
 #QualityControl - R script
 
 library(Seurat)
+library(SeuratObject)
 library(scales)
 library(cowplot)
 library(ggplot2)
@@ -19,8 +20,8 @@ output_file <- args[2]
 mito_percent <- as.numeric(args[3])
 
 individual_data <- readRDS(loaded_data)
-data_S_list <- FilterCells(individual_data, ngene_lth = 500,
+individual_data <- FilterCells(individual_data, ngene_lth = 500,
                            ngene_hth = 7500, mt_hth = mito_percent)
-saveRDS(data_S_list, output_file)
+saveRDS(individual_data, output_file)
 
 sessionInfo()

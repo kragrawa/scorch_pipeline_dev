@@ -1,5 +1,4 @@
 library(Seurat)
-library(DoubletFinder) #remotes::install_github('chris-mcginnis-ucsf/DoubletFinder')
 library(Libra)
 library(rlang)
 library(patchwork)
@@ -152,7 +151,7 @@ FilterCells <- function(data_S_list, ngene_lth = NULL, ngene_hth = NULL, mt_hth,
       data_S_list[[i]] <- subset(
         x = data_S_list[[i]], 
         #subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt < mt_hth & nCount_RNA > nRNA_lth & nCount_RNA < nRNA_hth
-        subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt < mt_hth
+        subset = nFeature_RNA > ngene_lth & nFeature_RNA <= ngene_hth & percent.mt <= mt_hth
       )
       data_S_list[[i]] <- RenameCells(data_S_list[[i]], add.cell.id = i)
     }
@@ -232,6 +231,7 @@ DoubletDetection <- function(data_S_list){
 scDoubletDetection <- function(data_S_list){
   for(i in names(data_S_list)){
     #convert to sce
+    data_S_list[[i]][["RNA"]] <- as(object = data_S_list[[i]][["RNA"]], Class = "Assay")
     data_sce <- as.SingleCellExperiment(data_S_list[[i]])
     data_sce <- scDblFinder(data_sce)
     data_S_list[[i]]$scDblFinder.class <- data_sce$scDblFinder.class
@@ -262,234 +262,6 @@ ClusterMetricTable <- function(seu_obj, cluster_col, metric_cols){
 }
 
 
-
-# preprocess the data all the way to clustering
-preprocessing2clustering <- function(sample_data_dir,
-                                     processed_data_dir,
-                                     sample_metadata,
-                                     ngene_lth = 500, 
-                                     ngene_hth = 7500, 
-                                     mt_hth = 10){
-  
-  library(Seurat) # packageVersion("Seurat") ‘4.1.1’
-  library(scales)
-  library(cowplot)
-  library(ggplot2)
-  library(biomaRt)
-  library(dplyr)
-  library(viridis)
-  library(grid)
-  #library(ggpubr)
-  
-  
-  # 1. data loading: all the samples and RNA only
-  sample_names <- list.dirs(sample_data_dir, full.names = F, recursive = F)
-  sample_names
-  data_S_list_v0 <- Load10xData(sample_data_dir, sample_names,with.multiome.rna.only = T) 
-  
-  # 2. Quality control
-  setwd(processed_data_dir)
-  dir.create(file.path(processed_data_dir, "figure/"), showWarnings = TRUE)
-  
-  prefix <- "all"
-  get_quality_vlnplot(data_S_list_v0, file = get_output_name("quality_vlnplot.pdf", prefix, "figure"),width = 8,height=12)
-  
-  # TODO: calibrate these thresholds
-  message(paste0("Filtering cells with thresholds - ngene_lth: ",ngene_lth," ngene_hth: ",ngene_hth," mt_hth: ",mt_hth))
-  data_S_list <- FilterCells(data_S_list_v0, ngene_lth = ngene_lth, ngene_hth = ngene_hth, mt_hth = mt_hth)
-  metric_report <- get_metric_summary(data_S_list_v0, data_S_list)
-  message("Writing QC metrics")
-  write.csv(metric_report, file = get_output_name("metric_summary.csv", prefix), quote = F)
-  
-  #Process Sample for doublet detection
-  data_S_list <- ProcessSingleSample(data_S_list)
-  
-  #Doublet_Detection using DoubletFinder --> this step can take some time
-  data_S_list <- scDoubletDetection(data_S_list)
-  
-  #save individual objects with doublets
-  saveRDS(data_S_list, file = paste0(processed_data_dir,"/raw_individual_doublets.rds"))
-  
-  
-  # 3. Merge data:
-  message("Merging seurat objects")
-  data_S <- MergeData(data_S_list)
-  rm(data_S_list_v0)
-  rm(data_S_list)
-  
-  #save object with doublets
-  saveRDS(data_S, file = paste0(processed_data_dir,"/raw_merged_doublets.rds"))
-  
-  # remove doublets
-  data_S <- subset(data_S,cells=colnames(data_S)[data_S@meta.data$scDblFinder.class == "singlet"])
-  
-  # 4. Data normalization and dimensionality reduction
-  DefaultAssay(data_S) <- "RNA"
-  data_S <- NormalizeData(data_S)
-  data_S <- FindVariableFeatures(data_S)
-  data_S <- ScaleData(data_S)
-  data_S <- RunPCA(data_S, npcs = 30, verbose = F)
-  
-  matching_conditions <- sample_metadata$sample_ids
-  names(matching_conditions) <- sample_metadata$sample_names
-  data_S$condition <- matching_conditions[data_S$orig.ident]
-  
-  
-  
-  
-  # 5. Data Integration (for visualization and perhaps better cell type annotation)
-  
-  data.combined <- CreateSeuratObject(counts = data_S@assays$RNA@counts,
-                                      meta.data = data_S@meta.data)
-  data.list <- SplitObject(data.combined, split.by = "condition")
-  rm(data.combined)
-  data.list <- lapply(X = data.list, FUN = function(x) {
-    x <- NormalizeData(x, verbose = FALSE)
-    x <- FindVariableFeatures(x, verbose = FALSE)
-  })
-  features <- SelectIntegrationFeatures(object.list = data.list)
-  data.list <- lapply(X = data.list, FUN = function(x) {
-    x <- ScaleData(x, features = features, verbose = FALSE)
-    x <- RunPCA(x, features = features, verbose = FALSE)
-  })
-  
-  anchors <- FindIntegrationAnchors(object.list = data.list,  reduction = "rpca")
-  data.integrated <- IntegrateData(anchorset = anchors)
-  data.integrated <- ScaleData(data.integrated, verbose = FALSE)
-  data.integrated <- RunPCA(data.integrated,npcs = 30, verbose = FALSE)
-  data.integrated <-  RunTSNE(
-    data.integrated, tsne.method = "FIt-SNE", check_duplicates = FALSE, do.fast = TRUE, seed.use=3, dims = 1:30, perplexity = 100,
-    fast_tsne_path="/bin/fast_tsne", ann_not_vptree=FALSE, nthreads=12
-  )
-  rm(anchors)
-  rm(data.list)
-  
-  
-  matching_conditions2 <- sample_metadata$condition
-  names(matching_conditions2) <- sample_metadata$sample_names
-  data.integrated$label <- matching_conditions2[data.integrated$orig.ident]
-  
-  
-  # 6. clustering
-  DefaultAssay(data.integrated) <- "integrated"
-  data.integrated <- FindNeighbors(data.integrated, dims = 1:30)
-  
-  # try several resolutions: 0.1, 0.3, 0.5, 0.7, 0.9
-  clustering_res <- c(0.1,0.3,0.5,0.7,0.9)
-  for (res in clustering_res) {
-    message(paste0("Louvain Clustering with resolution: ",res))
-    data.integrated <- FindClusters(data.integrated, resolution = res)
-  }
-  
-  #data.integrated$integrated_cluster <- data.integrated$integrated_snn_res.0.3 #integrated
-  DefaultAssay(data.integrated) <- "RNA"
-  # 7. save the seurat object
-  saveRDS(data.integrated,file = paste0(processed_data_dir,"/seurat_integrate_cluster.RDS"))
-  writeLines(capture.output(sessionInfo()), paste0(processed_data_dir,"/sessionInfo.txt"))
-}
-
-StackedVlnMarkerPlot2 <- function(features_df, seu_obj, plot_name, col_name){
-  #get the total list of genes and make sure features selected
-  #are in the list
-  features_df$grouping <- as.factor(features_df$grouping)
-  all.genes <- row.names(seu_obj)
-  features <- features_df$Feat[(features_df$Feat %in% all.genes)]
-  
-  #get the metadata of object for cluster information
-  cell_meta <- seu_obj@meta.data
-  cluster_info <- cell_meta[c(col_name)]
-  counts <- as.data.frame(as.matrix(seu_obj@assays$RNA@data[features,]))
-  counts <- t(counts)
-  count_cluster_df <- merge(counts, cluster_info,  by = 'row.names', all = TRUE)
-  #return(count_cluster_df)
-  count_cluster_df$Cell <- count_cluster_df$Row.names
-  count_cluster_df$Idents <- count_cluster_df[[col_name]]
-  
-  count_cluster_df <- reshape2::melt(count_cluster_df, id.vars = c("Cell","Idents"), measure.vars = features,
-                                     variable.name = "Feat", value.name = "Expr")
-  
-  count_cluster_df <- left_join(count_cluster_df,features_df, by="Feat")
-  #return(count_cluster_df)
-  
-  #need to refactor if you have subsetted
-  count_cluster_df$Idents <- factor(count_cluster_df$Idents)
-  
-  avg <- sapply(X = split(x = count_cluster_df, f = count_cluster_df$Idents),
-                FUN = function(df) { return(tapply(X = df$Expr, INDEX = df$Feat, FUN = mean)) })
-  
-  
-  L2Norm <- function(mat, MARGIN){
-    normalized <- sweep(x = mat, MARGIN = MARGIN,
-                        STATS = apply(X = mat, MARGIN = MARGIN,
-                                      FUN = function(x){ sqrt(x = sum(x ^ 2)) }), FUN = "/")
-    normalized[!is.finite(x = normalized)] <- 0
-    return(normalized)
-  }
-  
-  # Performs hierarchical clustering
-  idents.order <- hclust(d = dist(t(L2Norm(mat = avg, MARGIN = 2))))$order
-  avg <- avg[,idents.order]
-  avg <- L2Norm(mat = avg, MARGIN = 1)
-  mat <- hclust(d = dist(avg))$merge
-  
-  # Order feature clusters by position of their "rank-1 idents"
-  position <- apply(X = avg, MARGIN = 1, FUN = which.max)
-  orderings <- list()
-  for (i in 1:nrow(mat)) {
-    x <- if (mat[i,1] < 0) -mat[i,1] else orderings[[mat[i,1]]]
-    y <- if (mat[i,2] < 0) -mat[i,2] else orderings[[mat[i,2]]]
-    x.pos <- min(x = position[x])
-    y.pos <- min(x = position[y])
-    orderings[[i]] <- if (x.pos < y.pos) { c(x, y) } else { c(y, x) }
-  }
-  #features.order <- orderings[[length(orderings)]]
-  
-  # Update Feature and Identity factor orders
-  count_cluster_df$Idents <- factor(count_cluster_df$Idents, levels = levels(count_cluster_df$Idents)[idents.order])
-  #count_cluster_df$Feat <- factor(count_cluster_df$Feat, levels = levels(count_cluster_df$Feat)[features.order])
-  
-  #feature_labeller <- as_labeller(variable,value)
-  
-  # Plot stacked violin plot with reordered identity classes and features - horizontal
-  f <- ggplot(count_cluster_df, aes(Expr, factor(Idents), fill = Feat)) +
-    geom_violin(scale = "width", adjust = 1, trim = TRUE) +
-    scale_x_continuous(expand = c(0, 0), labels = function(x)
-      c(rep(x = "", times = length(x)-2), x[length(x) - 1], "")) +
-    facet_grid(cols = vars(grouping, Feat), scales = "free")  +
-    theme_cowplot(font_size = 12) +
-    theme(legend.position = "none", panel.spacing = unit(0, "lines"),
-          plot.title = element_text(hjust = 0.5),
-          panel.background = element_rect(fill = NA, color = "black"),
-          strip.background = element_blank(),
-          strip.text = element_text(face = "bold"),
-          strip.text.x.top = element_text(angle = 90, hjust = 0, vjust = 0.5)) +
-    ggtitle(plot_name) + xlab("Expression Level") + ylab("Identity")
-  
-  metric_table <- ClusterMetricTable(seu_obj, col_name, c("condition", "label"))
-  #return(metric_table)
-  metric_table$cluster <- as.factor(metric_table$cluster)
-  metric_table$cluster <- factor(metric_table$cluster, levels = levels(metric_table$cluster)[idents.order])
-  
-  #add total counts
-  totals <- metric_table %>%
-    group_by(cluster) %>%
-    summarize(total = sum(cell_counts))
-  
-  t <- ggplot(metric_table) +
-    aes(x = cluster, y = cell_counts, fill = sample_id, label = sample_id) +
-    geom_bar(position = "fill", stat = "identity") +
-    scale_fill_hue(direction = 1) +
-    labs(x = "cluster", title = "Cell Counts (Percentage)") +
-    theme_minimal() +
-    theme(
-      legend.position = "bottom",
-      plot.title = element_text(face = "bold")
-    ) +
-    geom_text(data=totals, aes(x=cluster, label=total, y=total, fill=NULL), position = position_fill(vjust = -0.05)) +
-    coord_flip()
-  
-  return(f)
-}
 
 StackedVlnMarkerPlot3 <- function(features_df, seu_obj, plot_name, col_name,feat_level){
   #get the total list of genes and make sure features selected
