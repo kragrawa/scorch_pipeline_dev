@@ -21,8 +21,10 @@ rm(data_S_list)
 # Remove the Doublets
 data_S <- subset(data_S, cells = colnames(data_S)[data_S@meta.data$scDblFinder.class == "singlet"]) # nolint: line_length_linter.
 
+# Split the data into RNA for integration in the future
+data_S[["RNA"]] <- split(data_S[["RNA"]], f = data_S$sample_ids)
+
 # 4. Data normalization and dimensionality reduction
-DefaultAssay(data_S) <- "RNA"
 data_S <- NormalizeData(data_S)
 data_S <- FindVariableFeatures(data_S)
 data_S <- ScaleData(data_S)
