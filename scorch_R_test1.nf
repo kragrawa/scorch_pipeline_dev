@@ -70,10 +70,28 @@ process CreateMetaData {
     """
 }
 
+process MergeData {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
+    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    
+    input:
+    path clean_samples
+
+    output:
+    path "merged_data.rds"
+    path "*.png"
+
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/MergeData.R $clean_samples merged_data.rds
+    """
+}
 
 // Workflow definition
 workflow {
     def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
     sample_metadata = CreateMetaData(data_dir) 
-    LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection
+    LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection | MergeData
 }
