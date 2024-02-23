@@ -7,13 +7,14 @@ process LoadData {
     
     input:
     path data_dir
+    path sample_metadata
 
     output:
     path "individual_samples.rds"
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadData.R "${data_dir}" individual_samples.rds
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadData.R "${data_dir}" $sample_metadata individual_samples.rds
     """
 }
 
@@ -51,8 +52,28 @@ process DoubletDetection {
     """
 }
 
+
+process CreateMetaData {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
+    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    
+    input:
+    path data_dir
+
+    output:
+    path "sample_metadata.rds"
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/CreateMetaData.R $data_dir sample_metadata.rds
+    """
+}
+
+
 // Workflow definition
 workflow {
     def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
-    LoadData(data_dir) | QualityControl | DoubletDetection
+    sample_metadata = CreateMetaData(data_dir) 
+    LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection
 }
