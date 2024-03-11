@@ -4,6 +4,7 @@ process LoadData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
     
     input:
     path data_dir
@@ -35,10 +36,30 @@ process QualityControl {
     """
 }
 
+process QualityControlAllen {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir '/data/kriti/pipeline_dev/allen_test/', mode: 'copy'
+    
+    input:
+    path raw_samples
+
+    output:
+    path "allen_seperate_mito_gene_filtered.rds"
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/QualityControl.R $raw_samples allen_seperate_mito_gene_filtered.rds
+    """
+}
+
+
+
 process DoubletDetection {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
     publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
     
     input:
     path filtered_samples
@@ -57,6 +78,7 @@ process CreateMetaData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
     publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
     
     input:
     path data_dir
@@ -74,6 +96,7 @@ process MergeData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
     publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
     
     input:
     path clean_samples
@@ -93,6 +116,7 @@ process IntegrateData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
     publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
     
     input:
     path merged_data
@@ -107,8 +131,36 @@ process IntegrateData {
     """
 }
 
+
+process LabelTransfer{
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
+    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
+    
+    input:
+    path integrated_data
+    path reference_data
+
+    output:
+    path "labeled_data.rds", emit: labeled_data
+    path "*.png"
+ 
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransfer.R $integrated_data labeled_data.rds
+    """
+}
+
 // Workflow definition
 workflow {
+    def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
+    sample_metadata = CreateMetaData(data_dir) 
+    LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection | MergeData
+    IntegrateData(MergeData.out.merged_data)
+}
+
+workflow allen_processing{
     def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
     sample_metadata = CreateMetaData(data_dir) 
     LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection | MergeData
