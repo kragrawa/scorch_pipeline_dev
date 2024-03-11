@@ -1,10 +1,11 @@
 nextflow.enable.dsl=2
 
+params.output_dir = "/data/kriti/pipeline_dev/test_output/"
+
 process LoadData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
-    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
+    publishDir "${params.output_dir}", mode: 'copy'
     
     input:
     path data_dir
@@ -22,7 +23,7 @@ process LoadData {
 process QualityControl {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
+    publishDir "${params.output_dir}" , mode: 'copy'
     
     input:
     path raw_samples
@@ -39,7 +40,7 @@ process QualityControl {
 process QualityControlAllen {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir '/data/kriti/pipeline_dev/allen_test/', mode: 'copy'
+    publishDir "${params.output_dir}", mode: 'copy'
     
     input:
     path raw_samples
@@ -58,8 +59,7 @@ process QualityControlAllen {
 process DoubletDetection {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
-    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
-    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
+    publishDir "${params.output_dir}" , mode: 'copy'
     
     input:
     path filtered_samples
@@ -77,9 +77,8 @@ process DoubletDetection {
 process CreateMetaData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
-    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
-    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
-    
+    publishDir "${params.output_dir}" , mode: 'copy'
+
     input:
     path data_dir
 
@@ -95,8 +94,7 @@ process CreateMetaData {
 process MergeData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
-    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
-    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
+    publishDir "${params.output_dir}" , mode: 'copy'
     
     input:
     path clean_samples
@@ -115,8 +113,7 @@ process MergeData {
 process IntegrateData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
-    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
-    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
+    publishDir "${params.output_dir}", mode: 'copy'
     
     input:
     path merged_data
@@ -135,8 +132,7 @@ process IntegrateData {
 process LabelTransfer{
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
-    publishDir '/data/kriti/pipeline_dev/test_output/', mode: 'copy'
-    publishDir '/data/kriti/pipeline_dev/allen_output/', mode: 'copy'
+    publishDir "${params.output_dir}", mode: 'copy'
     
     input:
     path integrated_data
@@ -148,21 +144,30 @@ process LabelTransfer{
  
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransfer.R $integrated_data labeled_data.rds
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransfer.R $integrated_data $reference_data cell_types_level1_predicted labeled_data.rds
     """
 }
 
 // Workflow definition
-workflow {
+workflow current_processing {
     def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
+    def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
     LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection | MergeData
     IntegrateData(MergeData.out.merged_data)
+    LabelTransfer(IntegrateData.out.integrated_data, reference_data)
 }
 
 workflow allen_processing{
     def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
+    def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
-    LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection | MergeData
+    LoadData(data_dir, sample_metadata) | QualityControlAllen | DoubletDetection | MergeData
     IntegrateData(MergeData.out.merged_data)
+    LabelTransfer(IntegrateData.out.integrated_data, reference_data)
+}
+
+workflow {
+    current_processing()
+    /*allen_processing()*/
 }

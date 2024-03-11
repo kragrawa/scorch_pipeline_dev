@@ -22,8 +22,8 @@ output_file <- args[4]
 integrated_data <- readRDS(loaded_data)
 reference_data <- readRDS(reference)
 
-anchors <- FindTransferAnchors(reference_data, 
-      integrated_data, reference.reduction = "integrated.rpca", dims = 1:30)
+anchors <- FindTransferAnchors(reference_data,
+    integrated_data, reference.reduction = "integrated.rpca", dims = 1:30)
 
 predictions <- TransferData(
   anchorset = anchors,
