@@ -50,7 +50,7 @@ process QualityControlAllen {
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/QualityControl.R $raw_samples allen_seperate_mito_gene_filtered.rds
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/AllenProcessing.R $raw_samples allen_seperate_mito_gene_filtered.rds
     """
 }
 

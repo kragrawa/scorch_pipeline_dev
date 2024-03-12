@@ -19,6 +19,7 @@ loaded_data <- args[1]
 output_file <- args[2]
 
 individual_data <- readRDS(loaded_data)
+
 for(i in names(individual_data)){
   individual_data[[i]] <- subset(
     x = individual_data[[i]],
