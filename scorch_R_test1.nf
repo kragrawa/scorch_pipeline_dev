@@ -1,6 +1,7 @@
 nextflow.enable.dsl=2
 
 params.output_dir = "/data/kriti/pipeline_dev/test_output/"
+params.input_dir = "/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/"
 
 process LoadData {
     container 'seurat_v5_image'
@@ -149,8 +150,8 @@ process LabelTransfer{
 }
 
 // Workflow definition
-workflow current_processing {
-    def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
+workflow mito_filter_processing {
+    def data_dir = Channel.fromPath("${params.input_dir}")
     def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
     LoadData(data_dir, sample_metadata) | QualityControl | DoubletDetection | MergeData
@@ -158,8 +159,8 @@ workflow current_processing {
     LabelTransfer(IntegrateData.out.integrated_data, reference_data)
 }
 
-workflow allen_processing{
-    def data_dir = Channel.fromPath('/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/')
+workflow no_mito_processing{
+    def data_dir = Channel.fromPath("${params.input_dir}")
     def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
     LoadData(data_dir, sample_metadata) | QualityControlAllen | DoubletDetection | MergeData
@@ -168,6 +169,6 @@ workflow allen_processing{
 }
 
 workflow {
-    current_processing()
+    no_mito_processing()
     /*allen_processing()*/
 }
