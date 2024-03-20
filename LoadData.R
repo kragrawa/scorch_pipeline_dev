@@ -27,7 +27,9 @@ sample_metadata <- readRDS(metadata)
 
 sample_names <- list.dirs(sample_data_dir, full.names = F, recursive = F)
 sample_names
-data_S_list_v0 <- Load10xData(sample_data_dir, sample_names, with.rna.only = T, sub_rna_dir = "outs/filtered_feature_bc_matrix")
+
+# Assuming ARC data input
+data_S_list_v0 <- Load10xData(sample_data_dir, sample_names, with.multiome.rna.only = T, sub_rna_dir = "outs/filtered_feature_bc_matrix")
 
 #add in the metadata
 for(sample in sample_names){
