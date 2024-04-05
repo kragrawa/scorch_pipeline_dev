@@ -58,7 +58,7 @@ process QualityControl {
     """
 }
 
-process QualityControlAllen {
+process QualityControlGenes {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}", mode: 'copy'
@@ -71,7 +71,7 @@ process QualityControlAllen {
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/AllenProcessing.R $raw_samples allen_seperate_mito_gene_filtered.rds
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/FilterGeneCount.R $raw_samples allen_seperate_mito_gene_filtered.rds
     """
 }
 
@@ -182,7 +182,7 @@ workflow no_mito_processing{
     def data_dir = Channel.fromPath("${params.input_dir}")
     def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
-    LoadData(data_dir, sample_metadata) | QualityControlAllen | DoubletDetection | MergeData
+    LoadData(data_dir, sample_metadata) | QualityControlGenes | DoubletDetection | MergeData
     IntegrateData(MergeData.out.merged_data)
     LabelTransfer(IntegrateData.out.integrated_data, reference_data)
 }
