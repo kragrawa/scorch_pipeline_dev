@@ -1,7 +1,9 @@
 nextflow.enable.dsl=2
 
 params.output_dir = "/data/kriti/pipeline_dev/test_output/"
-params.input_dir = "/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_v7_RNA/"
+params.input_dir = "/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_arc"
+params.chrX_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/X_chromosome_gene_names.txt"
+params.chrY_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/Y_chromosome_gene_names.txt"
 
 process LoadData {
     container 'seurat_v5_image'
@@ -18,6 +20,24 @@ process LoadData {
     script:
     """
     Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadData.R "${data_dir}" $sample_metadata individual_samples.rds
+    """
+}
+
+
+process FilterMitoAndSexGenes {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir "${params.output_dir}" , mode: 'copy'
+    
+    input:
+    path raw_samples
+
+    output:
+    path "sample_no_mito_no_sex.rds"
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/FilterMitoAndSexGenes.R $raw_samples sample_no_mito_no_sex.rds ${params.chrX_genes} ${params.chrY_genes}
     """
 }
 
@@ -54,7 +74,6 @@ process QualityControlAllen {
     Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/AllenProcessing.R $raw_samples allen_seperate_mito_gene_filtered.rds
     """
 }
-
 
 
 process DoubletDetection {
@@ -171,4 +190,11 @@ workflow no_mito_processing{
 workflow {
     no_mito_processing()
     /*allen_processing()*/
+}
+
+workflow testing{
+    def data_dir = Channel.fromPath("${params.input_dir}")
+    def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
+    sample_metadata = CreateMetaData(data_dir) 
+    LoadData(data_dir, sample_metadata) | FilterMitoAndSexGenes
 }
