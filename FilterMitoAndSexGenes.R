@@ -9,6 +9,8 @@ library(biomaRt)
 library(dplyr)
 library(viridis)
 library(grid)
+library(Matrix)
+library(R.utils)
 
 # source Junchen's helper functions
 source("/data/kriti/pipeline_dev/scorch_pipeline_dev/r_helper_functions/seurat_wrapper_funs.R")
@@ -37,8 +39,13 @@ for(i in names(individual_data)){
   data <- individual_data[[i]][["RNA"]]$counts
   sample_metadata <- individual_data[[i]][[]]
   filteredData <- data[!rownames(data) %in% genes_to_remove, ]
+
   filteredSamples[[i]] <- CreateSeuratObject(counts = filteredData, project = i)
   filteredSamples[[i]] <- AddMetaData(filteredSamples[[i]], sample_metadata[Cells(filteredSamples[[i]]), ])
+  # save the counts matrix for each file
+  filtered_counts <- filteredSamples[[i]][["RNA"]]$counts
+  writeMM(filtered_counts, paste0(i, "_no_mito_sex_counts.mtx"))
+  gzip(paste0(i, "_no_mito_sex_counts.mtx"))
 }
 
 saveRDS(filteredSamples, output_file)

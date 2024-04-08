@@ -36,7 +36,7 @@ process FilterMitoAndSexGenes {
 
     output:
     path "sample_no_mito_no_sex.rds", emit: no_mito_no_sex_samples
-    path ".mtx.gz", emit: no_mito_no_sex_counts
+    path "*.mtx.gz", emit: no_mito_no_sex_counts
 
     script:
     """
@@ -200,4 +200,5 @@ workflow testing{
     def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
     LoadData(data_dir, sample_metadata)
+    FilterMitoAndSexGenes(LoadData.out.raw_samples)
 }
