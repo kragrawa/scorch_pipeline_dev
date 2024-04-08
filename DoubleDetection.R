@@ -21,6 +21,16 @@ data_S_list <- ProcessSingleSample(data_S_list)
 # Doublet_Detection using DoubletFinder --> this step can take some time
 data_S_list <- scDoubletDetection(data_S_list)
 
+metadata <- data.frame()
+embeddings <- data.frame()
+for(i in names(data_S_list)){
+  metadata <- rbind(metadata, data_S_list[[i]][[]])
+  embeddings <- rbind(embeddings, Embeddings(object = data_S_list[[i]][["pca"]]))
+}
+
+write.csv(metadata, "metadata_doublet_dectection.csv")
+write.csv(embeddings, "embeddings_doublet_dectection_pca.csv")
+
 # save individual objects with doublets
 saveRDS(data_S_list, output_file)
 

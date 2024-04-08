@@ -89,7 +89,9 @@ process DoubletDetection {
     path filtered_samples
 
     output:
-    path "seperate_doublets_filtered.rds"
+    path "seperate_doublets_filtered.rds", emit: doublet_samples
+    path "metadata_doublet_dectection.csv", emit: metadata_doublet_detection
+    path "embeddings_doublet_dectection_pca.csv", emit: embeddings_doublet_detection_pca
 
     script:
     """
@@ -203,4 +205,5 @@ workflow testing{
     LoadData(data_dir, sample_metadata)
     FilterMitoAndSexGenes(LoadData.out.raw_samples)
     QualityControlGenes(FilterMitoAndSexGenes.out.no_mito_no_sex_samples)
+    DoubletDetection(QualityControlGenes.out.filtered_samples)
 }
