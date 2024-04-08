@@ -9,6 +9,8 @@ library(dplyr)
 library(viridis)
 library(grid)
 library(dplyr)
+library(Matrix)
+library(R.utils)
 
 #parse command-line arguments
 args <- commandArgs(trailingOnly = TRUE)
@@ -31,11 +33,28 @@ sample_names
 # Assuming ARC data input
 data_S_list_v0 <- Load10xData(sample_data_dir, sample_names, with.multiome.rna.only = T, sub_rna_dir = "outs/filtered_feature_bc_matrix")
 
-#add in the metadata
+#store the counts matrix for each sample
+counts <- list()
+
+#add in the metadata and store counts matrix
 for(sample in sample_names){
   metadata_row <- sample_metadata[sample_metadata$sample_names %in% sample, ]
   metadata_list <- as.list(metadata_row[-which(names(metadata_row) == "sample_names")])
   data_S_list_v0[[sample]] <- AddMetaData(data_S_list_v0[[sample]], metadata = metadata_list)
 }
+
+metadata <- data.frame()
+
+for (sample in sample_names){
+  #save the counts matrix for each file
+  counts <- data_S_list_v0[[sample]][["RNA"]]$counts
+  writeMM(counts, paste0(sample, "_counts.mtx"))
+  gzip(paste0(sample, "_counts.mtx"))
+
+  #save the metadata for each file
+  cur_md <- data_S_list_v0[[sample]][[]]
+  metadata <- rbind(metadata, cur_md)
+}
+write.csv(metadata, "raw_metadata.csv")
 
 saveRDS(data_S_list_v0, output_file)

@@ -15,7 +15,9 @@ process LoadData {
     path sample_metadata
 
     output:
-    path "individual_samples.rds"
+    path "individual_samples.rds", emit: raw_samples
+    path "*.mtx.gz", emit: raw_counts
+    path "raw_metadata.csv", emit: raw_metadata
 
     script:
     """
@@ -33,7 +35,8 @@ process FilterMitoAndSexGenes {
     path raw_samples
 
     output:
-    path "sample_no_mito_no_sex.rds"
+    path "sample_no_mito_no_sex.rds", emit: no_mito_no_sex_samples
+    path ".mtx.gz", emit: no_mito_no_sex_counts
 
     script:
     """
@@ -178,17 +181,17 @@ workflow mito_filter_processing {
     LabelTransfer(IntegrateData.out.integrated_data, reference_data)
 }
 
-workflow no_mito_processing{
+workflow allen_processing{
     def data_dir = Channel.fromPath("${params.input_dir}")
     def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
-    LoadData(data_dir, sample_metadata) | QualityControlGenes | DoubletDetection | MergeData
+    LoadData(data_dir, sample_metadata) | FilterMitoAndSexGenes | QualityControlGenes | DoubletDetection | MergeData
     IntegrateData(MergeData.out.merged_data)
     LabelTransfer(IntegrateData.out.integrated_data, reference_data)
 }
 
 workflow {
-    no_mito_processing()
+    allen_processing()
     /*allen_processing()*/
 }
 
@@ -196,5 +199,5 @@ workflow testing{
     def data_dir = Channel.fromPath("${params.input_dir}")
     def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
-    LoadData(data_dir, sample_metadata) | FilterMitoAndSexGenes
+    LoadData(data_dir, sample_metadata)
 }
