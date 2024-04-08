@@ -128,7 +128,7 @@ process MergeData {
     output:
     path "merged_data.rds", emit: merged_data
     path "*.png"
-
+    path "embeddings_umap_unintegrated.csv", emit: embeddings_umap_unintegrated
 
     script:
     """
@@ -206,4 +206,5 @@ workflow testing{
     FilterMitoAndSexGenes(LoadData.out.raw_samples)
     QualityControlGenes(FilterMitoAndSexGenes.out.no_mito_no_sex_samples)
     DoubletDetection(QualityControlGenes.out.filtered_samples)
+    MergeData(DoubletDetection.out.doublet_samples)
 }

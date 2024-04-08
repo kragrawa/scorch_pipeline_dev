@@ -43,6 +43,7 @@ ggsave(filename = "umap_unintegrated_condition.png", plot = p1, width = 10, heig
 ggsave(filename = "umap_unintegrated_sample_ids.png", plot = p2, width = 10, height = 10, dpi = 700)
 ggsave(filename = "umap_unintegrated_seurat_clusters.png", plot = p3, width = 10, height = 10, dpi = 700)
 
+write.csv(Embeddings(data_S[["umap.unintegrated"]]), "embeddings_umap_unintegrated.csv")
 # save individual objects with doublets
 saveRDS(data_S, output_file)
 
