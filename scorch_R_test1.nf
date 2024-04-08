@@ -70,7 +70,8 @@ process QualityControlGenes {
     path raw_samples
 
     output:
-    path "allen_seperate_mito_gene_filtered.rds"
+    path "allen_seperate_mito_gene_filtered.rds", emit: filtered_samples
+    path "metadata_nFeatureRNA.csv", emit: metadata_nFeatureRNA
 
     script:
     """
@@ -201,4 +202,5 @@ workflow testing{
     sample_metadata = CreateMetaData(data_dir) 
     LoadData(data_dir, sample_metadata)
     FilterMitoAndSexGenes(LoadData.out.raw_samples)
+    QualityControlGenes(FilterMitoAndSexGenes.out.no_mito_no_sex_samples)
 }
