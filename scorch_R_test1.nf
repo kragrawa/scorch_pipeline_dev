@@ -4,6 +4,7 @@ params.output_dir = "/data/kriti/pipeline_dev/test_output/"
 params.input_dir = "/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_arc"
 params.chrX_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/X_chromosome_gene_names.txt"
 params.chrY_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/Y_chromosome_gene_names.txt"
+params.label_transfer_colname = "cell_types_level1_predicted"
 
 process LoadData {
     container 'seurat_v5_image'
@@ -175,6 +176,25 @@ process LabelTransfer{
     """
 }
 
+process LabelTransferSingleSample{
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
+    publishDir "${params.output_dir}", mode: 'copy'
+    
+    input:
+    path sample_data_list
+    path reference_data
+
+    output:
+    path "labeled_data_list.rds", emit: labeled_data_list
+    path "*.png"
+ 
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransferSingleSample.R $sample_data_list $reference_data "${params.label_transfer_colname}" labeled_data_list.rds
+    """
+}
+
 // Workflow definition
 workflow mito_filter_processing {
     def data_dir = Channel.fromPath("${params.input_dir}")
@@ -207,6 +227,7 @@ workflow testing{
     FilterMitoAndSexGenes(LoadData.out.raw_samples)
     QualityControlGenes(FilterMitoAndSexGenes.out.no_mito_no_sex_samples)
     DoubletDetection(QualityControlGenes.out.filtered_samples)
-    MergeData(DoubletDetection.out.doublet_samples)
+    LabelTransferSingleSample(DoubletDetection.out.doublet_samples, reference_data)
+    MergeData(LabelTransferSingleSample.out.labeled_data_list)
     IntegrateData(MergeData.out.merged_data)
 }
