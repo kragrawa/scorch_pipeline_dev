@@ -21,10 +21,10 @@ integrated_data <- IntegrateLayers(
   object = merged_data, method = RPCAIntegration,
   orig.reduction = "pca", new.reduction = "integrated.rpca", normalization.method = "LogNormalize")
 
-integrated_data <- FindNeighbors(integrated_data, reduction = "integrated.rpca", dims = 1:30)
+integrated_data <- FindNeighbors(integrated_data, reduction = "integrated.rpca", dims = 1:50)
 integrated_data <- FindClusters(integrated_data, resolution = 2, cluster.name = "rpca_clusters")
 
-integrated_data <- RunUMAP(integrated_data, reduction = "integrated.rpca", dims = 1:30, reduction.name = "umap.rpca")
+integrated_data <- RunUMAP(integrated_data, reduction = "integrated.rpca", dims = 1:50, reduction.name = "umap.rpca")
 
 p1 <- DimPlot(integrated_data, reduction = "umap.rpca", group.by = c("condition"))
 p2 <- DimPlot(integrated_data, reduction = "umap.rpca", group.by = c("sample_ids"))

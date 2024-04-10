@@ -28,12 +28,12 @@ data_S[["RNA"]] <- split(data_S[["RNA"]], f = data_S$sample_ids)
 data_S <- NormalizeData(data_S)
 data_S <- FindVariableFeatures(data_S)
 data_S <- ScaleData(data_S)
-data_S <- RunPCA(data_S, npcs = 30, verbose = F)
+data_S <- RunPCA(data_S, npcs = 50, verbose = F)
 
 # Unintegrated clustering
-data_S <- FindNeighbors(data_S, dims = 1:30, reduction = "pca")
+data_S <- FindNeighbors(data_S, dims = 1:50, reduction = "pca")
 data_S <- FindClusters(data_S, resolution = 2, cluster.name = "unintegrated_clusters")
-data_S <- RunUMAP(data_S, dims = 1:30, reduction = "pca", reduction.name = "umap.unintegrated")
+data_S <- RunUMAP(data_S, dims = 1:50, reduction = "pca", reduction.name = "umap.unintegrated")
 
 p1 <- DimPlot(data_S, reduction = "umap.unintegrated", group.by = c("condition"))
 p2 <- DimPlot(data_S, reduction = "umap.unintegrated", group.by = c("sample_ids"))
