@@ -143,10 +143,11 @@ process IntegrateData {
     
     input:
     path merged_data
-
+   
     output:
     path "integrated_data.rds", emit: integrated_data
     path "*.png"
+    path "embeddings_umap_integrated_rpca.csv", emit: embeddings_umap_integrated_rpca
  
     script:
     """
@@ -207,4 +208,5 @@ workflow testing{
     QualityControlGenes(FilterMitoAndSexGenes.out.no_mito_no_sex_samples)
     DoubletDetection(QualityControlGenes.out.filtered_samples)
     MergeData(DoubletDetection.out.doublet_samples)
+    IntegrateData(MergeData.out.merged_data)
 }

@@ -34,6 +34,9 @@ ggsave(filename = "umap_integrated_rpca_condition.png", plot = p1, width = 10, h
 ggsave(filename = "umap_integrated_rpca_sample_ids.png", plot = p2, width = 10, height = 10, dpi = 700)
 ggsave(filename = "umap_integrated_rpca_seurat_clusters.png", plot = p3, width = 10, height = 10, dpi = 700)
 
+#write the embeddings
+write.csv(Embeddings(integrated_data[["integrated.rpca"]]), "embeddings_umap_integrated_rpca.csv")
+
 # save individual objects with doublets
 saveRDS(integrated_data, output_file)
 
