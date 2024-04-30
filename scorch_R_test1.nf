@@ -1,10 +1,28 @@
 nextflow.enable.dsl=2
 
-params.output_dir = "/data/kriti/pipeline_dev/test_output/"
+params.output_dir = "/data/kriti/pipeline_dev/samplesheet_test/"
 params.input_dir = "/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_arc"
 params.chrX_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/X_chromosome_gene_names.txt"
 params.chrY_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/Y_chromosome_gene_names.txt"
 params.label_transfer_colname = "cell_types_level1_predicted"
+params.samplesheet = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/test_sample_sheet.csv"
+
+process LoadDataFromSampleSheet {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir "${params.output_dir}", mode: 'copy'
+    
+    input:
+    tuple val(sample_name), val(cellranger_path), val(metadata)
+
+    output:
+    path("${sample_name}_raw.rds"), emit: raw_data
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadDataSampleSheet.R "${cellranger_path}" '${metadata}' ${sample_name}_raw.rds
+    """
+}
 
 process LoadData {
     container 'seurat_v5_image'
@@ -219,7 +237,7 @@ workflow {
     /*allen_processing()*/
 }
 
-workflow testing{
+workflow quick_test{
     def data_dir = Channel.fromPath("${params.input_dir}")
     def reference_data = Channel.fromPath('/banach2/SCORCH/analysis/231118-combinedAnalysisPFC/seurat_integrated_v2.RDS')
     sample_metadata = CreateMetaData(data_dir) 
@@ -228,6 +246,15 @@ workflow testing{
     QualityControlGenes(FilterMitoAndSexGenes.out.no_mito_no_sex_samples)
     DoubletDetection(QualityControlGenes.out.filtered_samples)
     LabelTransferSingleSample(DoubletDetection.out.doublet_samples, reference_data)
-    MergeData(LabelTransferSingleSample.out.labeled_data_list)
-    IntegrateData(MergeData.out.merged_data)
+    /*MergeData(LabelTransferSingleSample.out.labeled_data_list)
+    IntegrateData(MergeData.out.merged_data)*/
+}
+
+/* read in the sample sheet*/
+samplesheet = Channel.fromPath(params.samplesheet)
+    .splitCsv(header: true, sep: ',')
+    .map { row -> tuple(row.sample_name, row.cellranger_path, row.collect { k, v -> "$k=$v" }.join(',')) }
+
+workflow testing{
+    LoadDataFromSampleSheet(samplesheet)
 }

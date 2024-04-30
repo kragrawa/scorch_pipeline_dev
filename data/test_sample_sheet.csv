@@ -1,0 +1,3 @@
+﻿sample_name,cellranger_path,age,sex,pmi,race,condition,region
+6801066772,/banach2/SCORCH/data/raw/10xMultiome-INS-CTR_HIV-6pairs-04202022/cellranger_arc/6801066772_HIV_INS2_MAH/outs/filtered_feature_bc_matrix,55.5,male,24.2,Native_Alaskan/American_Indian,HIV,INS
+HCCPL,/banach2/SCORCH/data/raw/10xMultiome-INS-CTR_HIV-6pairs-04202022/cellranger_arc/HCCPL_CTR_INS_MAH/outs/filtered_feature_bc_matrix,49,male,24,White,CTR,INS
