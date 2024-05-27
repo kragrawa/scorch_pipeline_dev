@@ -16,13 +16,32 @@ process LoadDataFromSampleSheet {
     tuple val(sample_name), val(cellranger_path), val(metadata)
 
     output:
-    path("${sample_name}_raw.rds"), emit: raw_data
+    tuple val(sample_name), path("raw_${sample_name}.rds"), emit: raw_data
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadDataSampleSheet.R "${cellranger_path}" '${metadata}' ${sample_name}_raw.rds
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadDataSampleSheet.R "${cellranger_path}" '${metadata}' raw_${sample_name}.rds
     """
 }
+
+process FilterMitoAndSexGenesSingleSample {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir "${params.output_dir}" , mode: 'copy'
+    
+    input:
+    tuple val(sample_name), val(raw_data)
+
+    output:
+    tuple val(sample_name), path ("filtered_${sample_name}.rds"), emit: filtered_data
+    path "*.mtx.gz", emit: no_mito_no_sex_counts
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/SingleSampleGeneFilter.R ${raw_data} filtered_${sample_name}.rds ${params.chrX_genes} ${params.chrY_genes} counts_mitosex_${sample_name}.mtx
+    """
+}
+
 
 process LoadData {
     container 'seurat_v5_image'
@@ -257,4 +276,5 @@ samplesheet = Channel.fromPath(params.samplesheet)
 
 workflow testing{
     LoadDataFromSampleSheet(samplesheet)
+    FilterMitoAndSexGenesSingleSample(LoadDataFromSampleSheet.out.raw_data)
 }
