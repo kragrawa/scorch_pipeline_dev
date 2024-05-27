@@ -42,6 +42,24 @@ process FilterMitoAndSexGenesSingleSample {
     """
 }
 
+process FilterNFeatureRNASingleSample {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir "${params.output_dir}", mode: 'copy'
+    
+    input:
+    tuple val(sample_name), val(filtered_data)
+
+    output:
+    tuple val(sample_name), path ("filter_complete_${sample_name}.rds")
+    path "*.csv", emit: metadata_nFeatureRNA
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/nFeatureRNA_SingleSample.R ${filtered_data} filter_complete_${sample_name}.rds metadata_nFeatureRNA_${sample_name}.csv
+    """
+}
+
 
 process LoadData {
     container 'seurat_v5_image'
@@ -277,4 +295,5 @@ samplesheet = Channel.fromPath(params.samplesheet)
 workflow testing{
     LoadDataFromSampleSheet(samplesheet)
     FilterMitoAndSexGenesSingleSample(LoadDataFromSampleSheet.out.raw_data)
+    FilterNFeatureRNASingleSample(FilterMitoAndSexGenesSingleSample.out.filtered_data)
 }
