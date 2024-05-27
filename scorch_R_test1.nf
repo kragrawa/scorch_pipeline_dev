@@ -6,6 +6,10 @@ params.chrX_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/X_chromos
 params.chrY_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/Y_chromosome_gene_names.txt"
 params.label_transfer_colname = "cell_types_level1_predicted"
 params.samplesheet = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/test_sample_sheet.csv"
+params.biccn_reference = "/banach2/SCORCH/data/analysis/resources/BICCN_withMetadata_sct.RDS"
+params.biccn_map_col = "within_area_subclass"
+params.ma_reference = "/banach2/SCORCH/data/analysis/resources/Ma_Sestan_seuratV5_sct.rds"
+params.ma_map_col = "subclass"
 
 
 /*
@@ -66,7 +70,7 @@ process FilterNFeatureRNASingleSample {
 
 process DoubletDetectionSingleSample {
     container 'seurat_v5_image'
-    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}" , mode: 'copy'
     
     input:
@@ -84,6 +88,29 @@ process DoubletDetectionSingleSample {
     """
 }
 
+process LabelTransferSingleSample{
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir "${params.output_dir}", mode: 'copy'
+    
+    input:
+    tuple val(sample_name), val(no_doublets)
+
+    output:
+    tuple val(sample_name), path ("labeled_${sample_name}.rds"), emit: labeled
+    path "umap_labeled_biccn_${sample_name}.png", emit: biccn_plots
+    path "umap_labeled_ma_${sample_name}.png", emit: ma_plots
+    path "biccn_pred_${sample_name}.csv", emit: biccn_predictions
+    path "ma_pred_${sample_name}.csv", emit: ma_predictions
+ 
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransferSingleSample.R ${no_doublets} "${params.biccn_reference}" "${params.biccn_map_col}" "${params.ma_reference}" "${params.ma_map_col}" ${sample_name} labeled_${sample_name}.rds
+    """
+}
+
+
+/* Older Directory Based Processing */
 process LoadData {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
@@ -254,7 +281,7 @@ process LabelTransfer{
     """
 }
 
-process LabelTransferSingleSample{
+process LabelTransferIndividualSample{
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
     publishDir "${params.output_dir}", mode: 'copy'
@@ -320,4 +347,5 @@ workflow testing{
     FilterMitoAndSexGenesSingleSample(LoadDataFromSampleSheet.out.raw_data)
     FilterNFeatureRNASingleSample(FilterMitoAndSexGenesSingleSample.out.filtered_data)
     DoubletDetectionSingleSample(FilterNFeatureRNASingleSample.out.rna_filtered_data)
+    LabelTransferSingleSample(DoubletDetectionSingleSample.out.no_doublets)
 }
