@@ -7,6 +7,10 @@ params.chrY_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/Y_chromos
 params.label_transfer_colname = "cell_types_level1_predicted"
 params.samplesheet = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/test_sample_sheet.csv"
 
+
+/*
+Sample Sheet and Single Sample Processing
+*/
 process LoadDataFromSampleSheet {
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
@@ -51,7 +55,7 @@ process FilterNFeatureRNASingleSample {
     tuple val(sample_name), val(filtered_data)
 
     output:
-    tuple val(sample_name), path ("filter_complete_${sample_name}.rds")
+    tuple val(sample_name), path ("filter_complete_${sample_name}.rds"), emit: rna_filtered_data
     path "*.csv", emit: metadata_nFeatureRNA
 
     script:
@@ -60,6 +64,25 @@ process FilterNFeatureRNASingleSample {
     """
 }
 
+process DoubletDetectionSingleSample {
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
+    publishDir "${params.output_dir}" , mode: 'copy'
+    
+    input:
+    tuple val(sample_name), val(rna_filtered_data)
+
+    output:
+    tuple val(sample_name), path ("clean_${sample_name}.rds"), emit: no_doublets
+    tuple val(sample_name), path ("doublets_${sample_name}.rds"), emit: doublets
+    path "metadata_doublet_dectection_${sample_name}.csv", emit: metadata_doublet_detection
+    path "embeddings_doublet_dectection_pca_${sample_name}.csv", emit: embeddings_doublet_detection_pca
+
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/DoubletDetectionSingleSample.R ${rna_filtered_data} doublets_${sample_name}.rds clean_${sample_name}.rds metadata_doublet_dectection_${sample_name}.csv embeddings_doublet_dectection_pca_${sample_name}.csv
+    """
+}
 
 process LoadData {
     container 'seurat_v5_image'
@@ -296,4 +319,5 @@ workflow testing{
     LoadDataFromSampleSheet(samplesheet)
     FilterMitoAndSexGenesSingleSample(LoadDataFromSampleSheet.out.raw_data)
     FilterNFeatureRNASingleSample(FilterMitoAndSexGenesSingleSample.out.filtered_data)
+    DoubletDetectionSingleSample(FilterNFeatureRNASingleSample.out.rna_filtered_data)
 }
