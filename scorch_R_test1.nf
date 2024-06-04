@@ -10,6 +10,9 @@ params.biccn_reference = "/banach2/SCORCH/data/analysis/resources/BICCN_withMeta
 params.biccn_map_col = "within_area_subclass"
 params.ma_reference = "/banach2/SCORCH/data/analysis/resources/Ma_Sestan_seuratV5_sct.rds"
 params.ma_map_col = "subclass"
+params.nhp_vst_reference = "/banach2/SCORCH/data/analysis/resources/primate_nacc_vst_monkeyP_sct.RDS"
+params.nhp_vst_map_col = "cell_type_2"
+params.vst = false
 
 
 /*
@@ -112,6 +115,40 @@ process LabelTransferSingleSample{
     script:
     """
     Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransferSingleSample.R ${no_doublets} "${params.biccn_reference}" "${params.biccn_map_col}" "${params.ma_reference}" "${params.ma_map_col}" ${sample_name} labeled_${sample_name}.rds
+    """
+}
+
+process LabelTransferSingleSampleVST{
+    maxForks 4
+    tag {sample_name}
+    container 'seurat_v5_image'
+    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    publishDir "${params.output_dir}/${sample_name}/label_transfer/", mode: 'copy'
+    
+    input:
+    tuple val(sample_name), val(no_doublets)
+
+    output:
+    tuple val(sample_name), path ("labeled_${sample_name}.rds"), emit: labeled
+    path "umap_labeled_biccn_${sample_name}.png", emit: biccn_plots
+    path "umap_labeled_ma_${sample_name}.png", emit: ma_plots
+    path "umap_labeled_nhp_${sample_name}.png", emit: nhp_plots
+    path "biccn_pred_${sample_name}.csv", emit: biccn_predictions
+    path "ma_pred_${sample_name}.csv", emit: ma_predictions
+    path "nhp_pred_${sample_name}.csv", emit: nhp_predictions
+
+ 
+    script:
+    """
+    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransferVST.R ${no_doublets} \
+        "${params.biccn_reference}" \
+        "${params.biccn_map_col}" \
+        "${params.ma_reference}" \
+        "${params.ma_map_col}" \
+        "${params.nhp_vst_reference}" \
+        "${params.nhp_vst_map_col}" \
+        ${sample_name} \
+        labeled_${sample_name}.rds
     """
 }
 
@@ -289,6 +326,7 @@ process LabelTransfer{
     """
 }
 
+
 process LabelTransferIndividualSample{
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
@@ -355,5 +393,10 @@ workflow testing{
     FilterMitoAndSexGenesSingleSample(LoadDataFromSampleSheet.out.raw_data)
     FilterNFeatureRNASingleSample(FilterMitoAndSexGenesSingleSample.out.filtered_data)
     DoubletDetectionSingleSample(FilterNFeatureRNASingleSample.out.rna_filtered_data)
-    LabelTransferSingleSample(DoubletDetectionSingleSample.out.no_doublets)
+    if(params.vst){
+        LabelTransferSingleSampleVST(DoubletDetectionSingleSample.out.no_doublets)
+    }
+    else{
+        LabelTransferSingleSample(DoubletDetectionSingleSample.out.no_doublets)
+    }
 }
