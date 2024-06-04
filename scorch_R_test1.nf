@@ -16,9 +16,10 @@ params.ma_map_col = "subclass"
 Sample Sheet and Single Sample Processing
 */
 process LoadDataFromSampleSheet {
+    tag {sample_name}
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir "${params.output_dir}", mode: 'copy'
+    publishDir "${params.output_dir}/${sample_name}", mode: 'copy'
     
     input:
     tuple val(sample_name), val(cellranger_path), val(metadata)
@@ -33,9 +34,10 @@ process LoadDataFromSampleSheet {
 }
 
 process FilterMitoAndSexGenesSingleSample {
+    tag {sample_name}
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir "${params.output_dir}" , mode: 'copy'
+    publishDir "${params.output_dir}/${sample_name}/mito_sex_filter/" , mode: 'copy'
     
     input:
     tuple val(sample_name), val(raw_data)
@@ -51,9 +53,10 @@ process FilterMitoAndSexGenesSingleSample {
 }
 
 process FilterNFeatureRNASingleSample {
+    tag {sample_name}
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir "${params.output_dir}", mode: 'copy'
+    publishDir "${params.output_dir}/${sample_name}/nRNAFilter/", mode: 'copy'
     
     input:
     tuple val(sample_name), val(filtered_data)
@@ -69,9 +72,10 @@ process FilterNFeatureRNASingleSample {
 }
 
 process DoubletDetectionSingleSample {
+    tag {sample_name}
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir "${params.output_dir}" , mode: 'copy'
+    publishDir "${params.output_dir}/${sample_name}/doublet_detection/" , mode: 'copy'
     
     input:
     tuple val(sample_name), val(rna_filtered_data)
@@ -89,9 +93,11 @@ process DoubletDetectionSingleSample {
 }
 
 process LabelTransferSingleSample{
+    maxForks 4
+    tag {sample_name}
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
-    publishDir "${params.output_dir}", mode: 'copy'
+    publishDir "${params.output_dir}/${sample_name}/label_transfer/", mode: 'copy'
     
     input:
     tuple val(sample_name), val(no_doublets)
@@ -263,6 +269,8 @@ process IntegrateData {
 
 
 process LabelTransfer{
+    maxForks 4
+    memory '32GB'
     container 'seurat_v5_image'
     containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev'
     publishDir "${params.output_dir}", mode: 'copy'
