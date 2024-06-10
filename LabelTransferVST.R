@@ -75,6 +75,94 @@ sample <- AddMetaData(object = sample, metadata = predictions_BICCN)
 sample <- AddMetaData(object = sample, metadata = predictions_MA)
 sample <- AddMetaData(object = sample, metadata = predictions_nhp)
 
+# consensus annotations
+high_level_map <- list(
+  "MSNs" = "MSNs",
+  "Oligos" = "Glial",
+  "Microglia" = "Glial",
+  "Oligos_Pre" = "Glial",
+  "Astrocytes" = "Glial",
+  "Mural/Fibroblast" = "Nonneuronal",
+  "Endothelial" = "Nonneuronal",
+  "Interneurons" = "InterN",
+  "L2/3 IT" = "ExN",
+  "L6 IT" = "ExN",
+  "L4 IT" = "ExN",
+  "L5 IT" = "ExN",
+  "L6 IT Car3" = "ExN",
+  "L5 ET" = "ExN",
+  "L6 CT" = "ExN",
+  "L5/6 NP" = "ExN",
+  "L6b" = "ExN",
+  "Lamp5" = "InN",
+  "Vip" = "InN",
+  "Pax6" = "InN",
+  "Sncg" = "InN",
+  "Lamp5 Lhx6" = "InN",
+  "Chandelier" = "InN",
+  "Pvalb" = "InN",
+  "Sst" = "InN",
+  "Sst Chodl" = "InN",
+  "Astro" = "Glial",
+  "Endo" = "Nonneuronal",
+  "VLMC" = "Nonneuronal",
+  "Oligo" = "Glial",
+  "Micro/PVM" = "Glial",
+  "OPC" = "Glial",
+  "L3-5 IT-1" = "ExN",
+  "L2-3 IT" = "ExN",
+  "SST HGF" = "InN",
+  "VIP" = "InN",
+  "L3-5 IT-3" = "ExN",
+  "L6 IT-1" = "ExN",
+  "Micro" = "Glial",
+  "L5-6 NP" = "ExN",
+  "L6 IT-2" = "ExN",
+  "PC" = "Nonneuronal",
+  "L3-5 IT-2" = "ExN",
+  "LAMP5 LHX6" = "InN",
+  "Immune" = "Nonneuronal",
+  "PVALB" = "InN",
+  "ADARB2 KCNG1" = "InN",
+  "SST" = "InN",
+  "L6B" = "ExN",
+  "LAMP5 RELN" = "InN",
+  "SMC" = "Nonneuronal",
+  "SST NPY" = "InN",
+  "PVALB ChC" = "InN",
+  "RB" = "Nonneuronal"
+)
+
+high_level_vector <- unlist(high_level_map)
+
+metadata <- sample@meta.data
+
+# add high_level_mapping and consensus_annotation to metadata
+metadata <- metadata %>%
+  mutate(
+    high_level_ct_ma = high_level_vector[ma_predicted.id],
+    high_level_ct_biccn = high_level_vector[biccn_predicted.id],
+    high_level_ct_nhp = high_level_vector[nhp_vst_predicted.id]
+  )
+
+# Create consensus annotation based on the given conditions
+metadata <- metadata %>%
+  mutate(
+    high_level_ct = case_when(
+      high_level_ct_nhp %in% c("MSNs", "InterN") ~ high_level_ct_nhp,
+      high_level_ct_biccn %in% c("ExN", "InN") ~ high_level_ct_biccn,
+      TRUE ~ high_level_ct_ma
+    ),
+    consensus_annotation = case_when(
+      high_level_ct_nhp %in% c("MSNs", "InterN") ~ nhp_vst_predicted.id,
+      high_level_ct_biccn %in% c("ExN", "InN") ~ biccn_predicted.id,
+      TRUE ~ ma_predicted.id
+    )
+  )
+
+# add metadata back into the object
+sample@meta.data <- metadata
+
 #plot the predicted labels
 sample <- RunUMAP(sample, dims = 1:30)
 p1 <- DimPlot(sample, reduction = "umap", group.by = c("biccn_predicted.id"))
@@ -86,6 +174,13 @@ ggsave(filename = paste0("umap_labeled_ma_", sample_name, ".png"), plot = p2, wi
 p3 <- DimPlot(sample, reduction = "umap", group.by = c("nhp_vst_predicted.id"))
 ggsave(filename = paste0("umap_labeled_nhp_", sample_name, ".png"), plot = p3, width = 10, height = 10, dpi = 700)
 
+p4 <- DimPlot(sample, reduction = "umap", group.by = c("consensus_annotation"), label = TRUE)
+ggsave(filename = paste0("umap_consensus_", sample_name, ".png"), plot = p4, width = 10, height = 10, dpi = 700)
+
+p5 <- DimPlot(sample, reduction = "umap", group.by = c("high_level_ct"), label = TRUE)
+ggsave(filename = paste0("umap_high_level_ct_", sample_name, ".png"), plot = p5, width = 10, height = 10, dpi = 700)
+
+write.csv(metadata, paste0("labeled_metadata_", sample_name, ".csv"))
 saveRDS(sample, output_file)
 
 sessionInfo()

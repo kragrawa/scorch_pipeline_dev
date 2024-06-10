@@ -107,10 +107,11 @@ process LabelTransferSingleSample{
 
     output:
     tuple val(sample_name), path ("labeled_${sample_name}.rds"), emit: labeled
-    path "umap_labeled_biccn_${sample_name}.png", emit: biccn_plots
-    path "umap_labeled_ma_${sample_name}.png", emit: ma_plots
+    path "*.png", emit: plots
     path "biccn_pred_${sample_name}.csv", emit: biccn_predictions
     path "ma_pred_${sample_name}.csv", emit: ma_predictions
+    path "labeled_metadata_${sample_name}.csv", emit: metadata
+
  
     script:
     """
@@ -130,12 +131,11 @@ process LabelTransferSingleSampleVST{
 
     output:
     tuple val(sample_name), path ("labeled_${sample_name}.rds"), emit: labeled
-    path "umap_labeled_biccn_${sample_name}.png", emit: biccn_plots
-    path "umap_labeled_ma_${sample_name}.png", emit: ma_plots
-    path "umap_labeled_nhp_${sample_name}.png", emit: nhp_plots
+    path "*.png", emit: plots
     path "biccn_pred_${sample_name}.csv", emit: biccn_predictions
     path "ma_pred_${sample_name}.csv", emit: ma_predictions
     path "nhp_pred_${sample_name}.csv", emit: nhp_predictions
+    path "labeled_metadata_${sample_name}.csv", emit: metadata
 
  
     script:
