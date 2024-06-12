@@ -146,6 +146,8 @@ p4 <- DimPlot(sample, reduction = "umap", group.by = c("high_level_ct"), label =
 ggsave(filename = paste0("umap_high_level_ct_", sample_name, ".png"), plot = p4, width = 10, height = 10, dpi = 700)
 
 write.csv(metadata, paste0("labeled_metadata_", sample_name, ".csv"))
+final_counts <- sample[["RNA"]]$counts
+saveRDS(final_counts, paste0("final_counts_", sample_name, ".rds"))
 saveRDS(sample, output_file)
 
 sessionInfo()

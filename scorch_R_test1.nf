@@ -107,6 +107,7 @@ process LabelTransferSingleSample{
 
     output:
     tuple val(sample_name), path ("labeled_${sample_name}.rds"), emit: labeled
+    path "final_counts_${sample_name}.rds", emit: final_counts
     path "*.png", emit: plots
     path "biccn_pred_${sample_name}.csv", emit: biccn_predictions
     path "ma_pred_${sample_name}.csv", emit: ma_predictions
@@ -132,6 +133,7 @@ process LabelTransferSingleSampleVST{
     output:
     tuple val(sample_name), path ("labeled_${sample_name}.rds"), emit: labeled
     path "*.png", emit: plots
+    path "final_counts_${sample_name}.rds", emit: final_counts
     path "biccn_pred_${sample_name}.csv", emit: biccn_predictions
     path "ma_pred_${sample_name}.csv", emit: ma_predictions
     path "nhp_pred_${sample_name}.csv", emit: nhp_predictions
