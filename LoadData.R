@@ -23,7 +23,7 @@ print(sample_data_dir)
 print(output_file)
 
 #source Junchen's helper functions
-source("/data/kriti/pipeline_dev/scorch_pipeline_dev/r_helper_functions/seurat_wrapper_funs.R")
+source("/data/kriti/pipeline_dev/r_helper_functions/seurat_wrapper_funs.R")
 
 sample_metadata <- readRDS(metadata)
 

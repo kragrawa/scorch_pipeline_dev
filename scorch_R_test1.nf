@@ -2,10 +2,10 @@ nextflow.enable.dsl=2
 
 params.output_dir = "/data/kriti/pipeline_dev/samplesheet_test/"
 params.input_dir = "/banach2/SCORCH/data/raw/10xMultiome-PFC-HIVOUD_OUD-2pairs-12152022/cellranger_arc"
-params.chrX_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/X_chromosome_gene_names.txt"
-params.chrY_genes = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/Y_chromosome_gene_names.txt"
+params.chrX_genes = "/data/kriti/scorch_pipeline_dev/data/X_chromosome_gene_names.txt"
+params.chrY_genes = "/data/kriti/scorch_pipeline_dev/data/Y_chromosome_gene_names.txt"
 params.label_transfer_colname = "cell_types_level1_predicted"
-params.samplesheet = "/data/kriti/pipeline_dev/scorch_pipeline_dev/data/test_sample_sheet.csv"
+params.samplesheet = "/data/kriti/scorch_pipeline_dev/data/test_sample_sheet.csv"
 params.biccn_reference = "/banach2/SCORCH/data/analysis/resources/BICCN_withMetadata_sct.RDS"
 params.biccn_map_col = "within_area_subclass"
 params.ma_reference = "/banach2/SCORCH/data/analysis/resources/Ma_Sestan_seuratV5_sct.rds"
@@ -21,7 +21,7 @@ Sample Sheet and Single Sample Processing
 process LoadDataFromSampleSheet {
     tag {sample_name}
     container 'seurat_v5_image'
-    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    containerOptions = '-v /data/kriti/:/data/kriti/ -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}/${sample_name}", mode: 'copy'
     
     input:
@@ -32,14 +32,14 @@ process LoadDataFromSampleSheet {
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LoadDataSampleSheet.R "${cellranger_path}" '${metadata}' raw_${sample_name}.rds
+    Rscript /data/kriti/scorch_pipeline_dev/LoadDataSampleSheet.R "${cellranger_path}" '${metadata}' raw_${sample_name}.rds
     """
 }
 
 process FilterMitoAndSexGenesSingleSample {
     tag {sample_name}
     container 'seurat_v5_image'
-    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    containerOptions = '-v /data/kriti/:/data/kriti/ -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}/${sample_name}/mito_sex_filter/" , mode: 'copy'
     
     input:
@@ -51,14 +51,14 @@ process FilterMitoAndSexGenesSingleSample {
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/SingleSampleGeneFilter.R ${raw_data} filtered_${sample_name}.rds ${params.chrX_genes} ${params.chrY_genes} counts_mitosex_${sample_name}.mtx
+    Rscript /data/kriti/scorch_pipeline_dev/SingleSampleGeneFilter.R ${raw_data} filtered_${sample_name}.rds ${params.chrX_genes} ${params.chrY_genes} counts_mitosex_${sample_name}.mtx
     """
 }
 
 process FilterNFeatureRNASingleSample {
     tag {sample_name}
     container 'seurat_v5_image'
-    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    containerOptions = '-v /data/kriti/:/data/kriti/ -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}/${sample_name}/nRNAFilter/", mode: 'copy'
     
     input:
@@ -70,14 +70,14 @@ process FilterNFeatureRNASingleSample {
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/nFeatureRNA_SingleSample.R ${filtered_data} filter_complete_${sample_name}.rds metadata_nFeatureRNA_${sample_name}.csv
+    Rscript /data/kriti/scorch_pipeline_dev/nFeatureRNA_SingleSample.R ${filtered_data} filter_complete_${sample_name}.rds metadata_nFeatureRNA_${sample_name}.csv
     """
 }
 
 process DoubletDetectionSingleSample {
     tag {sample_name}
     container 'seurat_v5_image'
-    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    containerOptions = '-v /data/kriti/:/data/kriti/ -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}/${sample_name}/doublet_detection/" , mode: 'copy'
     
     input:
@@ -91,7 +91,7 @@ process DoubletDetectionSingleSample {
 
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/DoubletDetectionSingleSample.R ${rna_filtered_data} doublets_${sample_name}.rds clean_${sample_name}.rds metadata_doublet_dectection_${sample_name}.csv embeddings_doublet_dectection_pca_${sample_name}.csv
+    Rscript /data/kriti/scorch_pipeline_dev/DoubletDetectionSingleSample.R ${rna_filtered_data} doublets_${sample_name}.rds clean_${sample_name}.rds metadata_doublet_dectection_${sample_name}.csv embeddings_doublet_dectection_pca_${sample_name}.csv
     """
 }
 
@@ -99,7 +99,7 @@ process LabelTransferSingleSample{
     maxForks 4
     tag {sample_name}
     container 'seurat_v5_image'
-    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    containerOptions = '-v /data/kriti:/data/kriti/ -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}/${sample_name}/label_transfer/", mode: 'copy'
     
     input:
@@ -116,15 +116,15 @@ process LabelTransferSingleSample{
  
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransferSingleSample.R ${no_doublets} "${params.biccn_reference}" "${params.biccn_map_col}" "${params.ma_reference}" "${params.ma_map_col}" ${sample_name} labeled_${sample_name}.rds
+    Rscript /data/kriti/scorch_pipeline_dev/LabelTransferSingleSample.R ${no_doublets} "${params.biccn_reference}" "${params.biccn_map_col}" "${params.ma_reference}" "${params.ma_map_col}" ${sample_name} labeled_${sample_name}.rds
     """
 }
 
 process LabelTransferSingleSampleVST{
-    maxForks 4
+    maxForks 1
     tag {sample_name}
     container 'seurat_v5_image'
-    containerOptions = '-v /data/kriti/pipeline_dev:/data/kriti/pipeline_dev -v /banach2/SCORCH/data:/banach2/SCORCH/data'
+    containerOptions = '-v /data/kriti/:/data/kriti/ -v /banach2/SCORCH/data:/banach2/SCORCH/data'
     publishDir "${params.output_dir}/${sample_name}/label_transfer/", mode: 'copy'
     
     input:
@@ -142,7 +142,7 @@ process LabelTransferSingleSampleVST{
  
     script:
     """
-    Rscript /data/kriti/pipeline_dev/scorch_pipeline_dev/LabelTransferVST.R ${no_doublets} \
+    Rscript /data/kriti/scorch_pipeline_dev/LabelTransferVST.R ${no_doublets} \
         "${params.biccn_reference}" \
         "${params.biccn_map_col}" \
         "${params.ma_reference}" \

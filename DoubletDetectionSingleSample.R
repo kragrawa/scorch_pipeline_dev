@@ -5,7 +5,7 @@ library(scDblFinder)
 library(SingleCellExperiment)
 
 # source Junchen's helper functions
-source("/data/kriti/pipeline_dev/scorch_pipeline_dev/r_helper_functions/seurat_wrapper_funs.R")
+source("/data/kriti/scorch_pipeline_dev/r_helper_functions/seurat_wrapper_funs.R")
 
 # parse command-line arguments
 args <- commandArgs(trailingOnly = TRUE)
